@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}Routines · Yoto Scheduler{% endblock %}
+{% block content %}
+  <hgroup>
+    <h2>Routines</h2>
+    <p>Set the volume limits that apply at different times of day. Each routine starts at the time you give it on each player.</p>
+  </hgroup>
+
+  {% if not authorized %}
+    <article>You need to connect your Yoto account first. <a href="/ui/settings">Go to settings.</a></article>
+  {% else %}
+
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js"></script>
+
+  <div x-data="routinesEditor()" x-init="load()" x-cloak
+       @input.debounce.500ms="autosave()">
+    <div x-show="loading"><progress></progress> Loading…</div>
+
+    <div x-show="!loading">
+      <div class="action-row">
+        <button type="button" @click="addRoutine()">+ Add routine</button>
+        <span class="save-state" :class="saveClass" x-text="saveLabel"></span>
+      </div>
+
+      <template x-for="r in sortedRoutines()" :key="r.id">
+        <article class="routine-card">
+          <header class="routine-head">
+            <label class="routine-name">
+              <small>Name</small>
+              <input type="text" x-model="r.name" placeholder="e.g. bedtime" />
+            </label>
+            <label class="routine-cap volume-slider"
+                   :style="`--val: ${(Math.max(0, Math.min(16, r.volume_max || 0))/16*100)}%`">
+              <small>Volume limit</small>
+              <div class="slider-row">
+                <input type="range" min="0" max="16" step="1" x-model.number="r.volume_max" />
+                <span class="value" x-text="r.volume_max"></span>
+              </div>
+            </label>
+            <button type="button" @click="removeRoutine(r.id)" class="routine-delete" aria-label="Remove routine">✕</button>
+          </header>
+
+          <div class="player-times">
+            <template x-for="d in devices" :key="d.device_id">
+              <label>
+                <small x-text="d.name"></small>
+                <input type="time" x-model="r.times[d.device_id]" />
+              </label>
+            </template>
+          </div>
+        </article>
+      </template>
+
+      <div x-show="!routines.length" class="empty-state">
+        <p><strong>No routines yet.</strong></p>
+        <p>Add one to set a volume limit for part of the day — try a quiet <em>bedtime</em> or a louder <em>daytime</em>.</p>
+      </div>
+    </div>
+  </div>
+
+  <style>[x-cloak] { display: none !important; }</style>
+
+  <script>
+  function routinesEditor() {
+    return {
+      routines: [],
+      devices: [],
+      loading: true,
+
+      // Save state: 'idle' | 'saving' | 'saved' | 'error'
+      saveState: 'idle',
+      saveError: '',
+      _saveSeq: 0,           // monotonic id for in-flight saves
+      _lastDoneSeq: 0,       // last seq we showed a state for
+
+      get saveLabel() {
+        if (this.saveState === 'saving') return 'Saving…';
+        if (this.saveState === 'saved')  return 'Saved';
+        if (this.saveState === 'error')  return 'Error: ' + this.saveError;
+        return '';
+      },
+      get saveClass() { return this.saveState; },
+
+      async load() {
+        const data = await fetch('/schedule').then(r => r.json());
+        this.devices = data.known_devices || [];
+        this.routines = (data.config.routines || []).map(r => ({
+          id: crypto.randomUUID(),
+          name: r.name,
+          volume_max: r.volume_max,
+          times: Object.fromEntries(this.devices.map(d => {
+            const sched = (data.config.schedules || {})[d.device_id] || {};
+            return [d.device_id, sched[r.name] || ''];
+          })),
+        }));
+        this.loading = false;
+      },
+
+      sortedRoutines() {
+        const earliest = r => {
+          const times = Object.values(r.times).filter(t => t);
+          return times.length ? times.sort()[0] : '99:99';
+        };
+        return [...this.routines].sort((a, b) => earliest(a).localeCompare(earliest(b)));
+      },
+
+      addRoutine() {
+        this.routines.push({
+          id: crypto.randomUUID(),
+          name: '',
+          volume_max: 10,
+          times: Object.fromEntries(this.devices.map(d => [d.device_id, ''])),
+        });
+        // Don't save yet — empty-name routines are filtered out of the payload
+        // and would just confuse the user. Save fires once they type a name.
+        this.saveState = 'idle';
+      },
+
+      removeRoutine(id) {
+        this.routines = this.routines.filter(r => r.id !== id);
+        this.autosave();
+      },
+
+      buildPayload() {
+        const named = this.routines.filter(r => r.name.trim());
+        const routines = named.map(r => ({
+          name: r.name.trim(),
+          volume_max: parseInt(r.volume_max, 10),
+        }));
+        const schedules = {};
+        for (const d of this.devices) {
+          const dt = {};
+          for (const r of named) {
+            const t = r.times[d.device_id];
+            if (t) dt[r.name.trim()] = t;
+          }
+          if (Object.keys(dt).length) schedules[d.device_id] = dt;
+        }
+        return { routines, schedules };
+      },
+
+      autosave() {
+        if (this.loading) return;
+        this.save();
+      },
+
+      async save() {
+        const seq = ++this._saveSeq;
+        this.saveState = 'saving';
+        try {
+          const resp = await fetch('/schedule', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(this.buildPayload()),
+          });
+          // Ignore stale responses if a newer save started after this one.
+          if (seq < this._lastDoneSeq) return;
+          this._lastDoneSeq = seq;
+          if (!resp.ok) {
+            const body = await resp.json().catch(() => ({}));
+            throw new Error(body.detail || resp.statusText || 'save failed');
+          }
+          this.saveState = 'saved';
+          // Fade the 'Saved' message after a moment, only if nothing newer happened.
+          const stampSeq = seq;
+          setTimeout(() => {
+            if (this._lastDoneSeq === stampSeq && this.saveState === 'saved') {
+              this.saveState = 'idle';
+            }
+          }, 1500);
+        } catch (e) {
+          if (seq >= this._lastDoneSeq) {
+            this._lastDoneSeq = seq;
+            this.saveState = 'error';
+            this.saveError = e.message;
+          }
+        }
+      },
+    };
+  }
+  </script>
+  {% endif %}
+{% endblock %}

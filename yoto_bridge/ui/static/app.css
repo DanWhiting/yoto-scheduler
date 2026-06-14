@@ -1,0 +1,374 @@
+/* Yoto Scheduler — visual layer on top of Pico.
+ * One source of truth for theme via CSS variables; restyle every element we
+ * actually use so the page doesn't read as "default browser form".
+ */
+
+:root {
+  --ys-bg:           #faf8f4;
+  --ys-surface:      #ffffff;
+  --ys-text:         #2c2a26;
+  --ys-muted:        #7c7670;
+  --ys-border:       #ebe6da;
+  --ys-border-strong:#d6d0c2;
+  --ys-primary:      #e95b3c;
+  --ys-primary-deep: #d04f33;
+  --ys-primary-soft: rgba(233, 91, 60, 0.12);
+  --ys-success:      #2e7d32;
+  --ys-success-soft: rgba(46, 125, 50, 0.12);
+  --ys-error:        #c62828;
+  --ys-error-soft:   rgba(198, 40, 40, 0.10);
+  --ys-track-bg:     #ece6d7;
+
+  --ys-radius:    14px;
+  --ys-radius-sm: 10px;
+  --ys-shadow:        0 1px 2px rgba(20, 12, 0, 0.04), 0 4px 14px rgba(20, 12, 0, 0.05);
+  --ys-shadow-hover:  0 1px 2px rgba(20, 12, 0, 0.06), 0 10px 24px rgba(20, 12, 0, 0.07);
+  --ys-shadow-thumb:  0 2px 6px rgba(20, 12, 0, 0.18);
+
+  /* Override Pico tokens we want to recolour. */
+  --pico-primary: var(--ys-primary);
+  --pico-primary-hover: var(--ys-primary-deep);
+  --pico-primary-focus: var(--ys-primary-soft);
+  --pico-background-color: var(--ys-bg);
+  --pico-color: var(--ys-text);
+  --pico-muted-color: var(--ys-muted);
+  --pico-card-background-color: var(--ys-surface);
+  --pico-card-border-color: var(--ys-border);
+  --pico-border-radius: var(--ys-radius-sm);
+  --pico-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Helvetica Neue", Arial, sans-serif;
+}
+
+body {
+  background: var(--ys-bg);
+  color: var(--ys-text);
+}
+
+main.container { padding-block: 1.5rem 4rem; }
+
+
+/* ----- Header ------------------------------------------------- */
+
+.app-header { padding-block: 1.5rem 0; }
+.app-title {
+  margin: 0 0 1rem;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ys-text);
+}
+.app-header nav { padding: 0; }
+.app-header nav ul.nav-links {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.app-header nav ul.nav-links li { padding: 0; margin: 0; }
+.app-header nav a {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  color: var(--ys-muted);
+  font-weight: 500;
+  text-decoration: none;
+  border-radius: 999px;
+  transition: background 120ms ease, color 120ms ease;
+}
+.app-header nav a:hover {
+  background: var(--ys-primary-soft);
+  color: var(--ys-text);
+}
+.app-header nav a[aria-current="page"] {
+  background: var(--ys-primary);
+  color: #fff;
+}
+.app-header nav a[aria-current="page"]:hover {
+  background: var(--ys-primary-deep);
+}
+.nav-stub { opacity: 0.4; pointer-events: none; }
+
+
+/* ----- Inputs & labels --------------------------------------- */
+
+input[type="text"],
+input[type="number"],
+input[type="time"],
+input[type="password"],
+input[type="email"],
+select,
+textarea {
+  width: 100%;
+  padding: 0.6rem 0.85rem;
+  background: var(--ys-surface);
+  border: 1px solid var(--ys-border-strong);
+  border-radius: var(--ys-radius-sm);
+  font-size: 1rem;
+  color: var(--ys-text);
+  box-shadow: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+  margin: 0;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--ys-primary);
+  box-shadow: 0 0 0 3px var(--ys-primary-soft);
+}
+input::placeholder { color: var(--ys-muted); }
+
+/* Small label captions used in card rows */
+label > small {
+  display: block;
+  color: var(--ys-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.3rem;
+}
+
+
+/* ----- Buttons ----------------------------------------------- */
+
+button, [role="button"] {
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 0.55rem 1.15rem;
+  border: 1px solid transparent;
+  transition: transform 80ms ease, box-shadow 120ms ease, background 120ms ease, border-color 120ms ease, color 120ms ease;
+  cursor: pointer;
+}
+button:not(:disabled):hover, [role="button"]:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+button:not(:disabled):active, [role="button"]:not(:disabled):active {
+  transform: translateY(0);
+}
+button:disabled, [role="button"][aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+button.secondary {
+  background: var(--ys-surface);
+  border-color: var(--ys-border-strong);
+  color: var(--ys-text);
+}
+button.secondary:not(:disabled):hover {
+  background: var(--ys-primary-soft);
+  border-color: var(--ys-primary);
+  color: var(--ys-text);
+}
+button.outline {
+  background: transparent;
+  border-color: var(--ys-border-strong);
+  color: var(--ys-text);
+}
+
+
+/* ----- Range slider (volume cap) ----------------------------- */
+
+.volume-slider .slider-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+.volume-slider .slider-row .value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--ys-text);
+  background: var(--ys-track-bg);
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  min-width: 2.4rem;
+}
+
+input[type="range"] {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  height: 1.5rem;
+  padding: 0;
+  margin: 0;
+  border: none;
+  box-shadow: none;
+}
+input[type="range"]:focus { outline: none; box-shadow: none; }
+input[type="range"]:focus::-webkit-slider-thumb { box-shadow: 0 0 0 4px var(--ys-primary-soft), var(--ys-shadow-thumb); }
+input[type="range"]:focus::-moz-range-thumb     { box-shadow: 0 0 0 4px var(--ys-primary-soft), var(--ys-shadow-thumb); }
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(
+    to right,
+    var(--ys-primary) 0%,
+    var(--ys-primary) var(--val, 50%),
+    var(--ys-track-bg) var(--val, 50%),
+    var(--ys-track-bg) 100%
+  );
+}
+input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(
+    to right,
+    var(--ys-primary) 0%,
+    var(--ys-primary) var(--val, 50%),
+    var(--ys-track-bg) var(--val, 50%),
+    var(--ys-track-bg) 100%
+  );
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px; height: 22px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--ys-primary);
+  box-shadow: var(--ys-shadow-thumb);
+  cursor: grab;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--ys-primary);
+  box-shadow: var(--ys-shadow-thumb);
+  cursor: grab;
+}
+input[type="range"]:active::-webkit-slider-thumb,
+input[type="range"]:active::-moz-range-thumb { cursor: grabbing; }
+
+
+/* ----- Routine cards ----------------------------------------- */
+
+.routine-card {
+  background: var(--ys-surface);
+  border: 1px solid var(--ys-border);
+  border-radius: var(--ys-radius);
+  padding: 1.1rem 1.25rem 1.25rem;
+  margin: 0 0 0.85rem;
+  box-shadow: var(--ys-shadow);
+  transition: box-shadow 150ms ease;
+}
+.routine-card:hover { box-shadow: var(--ys-shadow-hover); }
+
+.routine-head {
+  display: grid;
+  grid-template-columns: 1.4fr 2fr auto;
+  gap: 1rem;
+  align-items: end;
+  margin-bottom: 1rem;
+}
+.routine-head label { margin: 0; }
+
+.routine-delete {
+  align-self: end;
+  padding: 0.45rem 0.75rem;
+  background: transparent;
+  border: 1px solid var(--ys-border-strong);
+  color: var(--ys-muted);
+  border-radius: 999px;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+.routine-delete:not(:disabled):hover {
+  background: var(--ys-error-soft);
+  border-color: rgba(198, 40, 40, 0.35);
+  color: var(--ys-error);
+}
+
+.player-times {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--ys-border);
+}
+.player-times label { margin: 0; }
+
+
+/* ----- Action row + autosave pill ---------------------------- */
+
+.action-row {
+  display: flex;
+  gap: 0.85rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+.action-row button { margin: 0; }
+
+.save-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  color: var(--ys-muted);
+  transition: opacity 200ms ease;
+}
+.save-state:empty { display: none; }
+.save-state.saving { background: var(--ys-track-bg); color: var(--ys-muted); }
+.save-state.saved  { background: var(--ys-success-soft); color: var(--ys-success); }
+.save-state.error  { background: var(--ys-error-soft);   color: var(--ys-error); }
+
+
+/* ----- Empty / hint --------------------------------------- */
+
+.empty-state {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  color: var(--ys-muted);
+  background: transparent;
+  border: 2px dashed var(--ys-border);
+  border-radius: var(--ys-radius);
+}
+.empty-state strong { color: var(--ys-text); }
+
+hgroup p {
+  color: var(--ys-muted);
+  font-size: 0.95rem;
+  margin-top: -0.25rem;
+}
+
+
+/* ----- Footer health pill --------------------------------- */
+
+#health-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--ys-muted);
+}
+.dot {
+  display: inline-block;
+  width: 0.55rem; height: 0.55rem;
+  border-radius: 50%;
+}
+.dot-on  { background: var(--ys-success); }
+.dot-off { background: var(--ys-error); }
+
+
+/* ----- Mobile ---------------------------------------------- */
+
+@media (max-width: 600px) {
+  .routine-head {
+    grid-template-columns: 1fr auto;
+    gap: 0.75rem;
+  }
+  .routine-head .routine-name { grid-column: 1 / -1; }
+  .routine-head .routine-cap  { grid-column: 1 / span 1; }
+  .app-title { font-size: 1.4rem; }
+}

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>{% block title %}Yoto Scheduler{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+  <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}" />
+  <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+</head>
+<body>
+  <header class="container app-header">
+    <h1 class="app-title">Yoto Scheduler</h1>
+    <nav>
+      <ul class="nav-links">
+        {% for item in nav %}
+        <li>
+          <a href="{{ item.href }}"
+             {% if item.active %}aria-current="page"{% endif %}
+             {% if item.stub %}class="nav-stub" title="Coming soon"{% endif %}>
+            {{ item.label }}
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    </nav>
+  </header>
+  <main class="container">
+    {% if message %}<article class="flash">{{ message }}</article>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="container">
+    <small>
+      <span id="health-pill" hx-get="/ui/partials/health" hx-trigger="load, every 10s"
+            hx-swap="innerHTML" hx-target="#health-pill"></span>
+    </small>
+  </footer>
+</body>
+</html>

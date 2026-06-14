@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Settings · Yoto Scheduler{% endblock %}
+{% block content %}
+  <h2>Settings</h2>
+
+  <article>
+    <h3>Yoto account</h3>
+    {% if authorized %}
+      <p>Linked. {{ player_count }} player(s) loaded. MQTT
+        {% if mqtt_connected %}<strong>connected</strong>{% else %}<strong>disconnected</strong>{% endif %}.
+      </p>
+      <form method="post" action="/ui/auth/logout">
+        <button type="submit" class="secondary">Disconnect Yoto account</button>
+      </form>
+    {% elif auth_flow %}
+      <p>Authorisation in progress. Open this URL on your phone:</p>
+      <p><a href="{{ auth_flow.verification_uri_complete }}" target="_blank" rel="noreferrer">
+        {{ auth_flow.verification_uri_complete }}
+      </a></p>
+      <p>User code: <code>{{ auth_flow.user_code }}</code></p>
+      <article id="auth-status" hx-get="/ui/partials/auth-status" hx-trigger="every 2s" hx-swap="innerHTML" hx-target="this">
+        Waiting for you to authorise…
+      </article>
+    {% else %}
+      <p>Not linked. Click below to start the device-code flow.</p>
+      <form method="post" action="/ui/auth/start">
+        <button type="submit">Connect Yoto account</button>
+      </form>
+    {% endif %}
+  </article>
+{% endblock %}
