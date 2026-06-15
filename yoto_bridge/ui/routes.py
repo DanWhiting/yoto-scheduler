@@ -32,11 +32,11 @@ templates.env.filters["hms"] = _hms
 
 
 NAV_ITEMS = [
-    ("Schedule",    "/ui/schedule",    False),
-    ("Library",     "/ui/library",     False),
-    ("Collections", "/ui/collections", True),
-    ("Events",      "/ui/events",      True),
-    ("Settings",    "/ui/settings",    False),
+    ("Routines", "/ui/routines", False),
+    ("Events",   "/ui/events",   False),
+    ("Library",  "/ui/library",  False),
+    ("Groups",   "/ui/groups",   False),
+    ("Settings", "/ui/settings", False),
 ]
 
 
@@ -59,31 +59,31 @@ router = APIRouter()
 
 @router.get("/", include_in_schema=False)
 async def root() -> RedirectResponse:
-    return RedirectResponse("/ui/schedule")
+    return RedirectResponse("/ui/routines")
 
 
 @router.get("/ui/", include_in_schema=False)
 async def ui_root() -> RedirectResponse:
-    return RedirectResponse("/ui/schedule")
+    return RedirectResponse("/ui/routines")
 
 
 # --- pages -----------------------------------------------------------------
 
 
-@router.get("/ui/schedule", response_class=HTMLResponse)
-async def schedule_page(request: Request) -> Any:
+@router.get("/ui/routines", response_class=HTMLResponse)
+async def routines_page(request: Request) -> Any:
     s = _state(request)
     if not s.authorized or s.sched is None:
         return templates.TemplateResponse(
             request,
-            "pages/schedule.html",
-            {"nav": _nav("/ui/schedule"), "authorized": False},
+            "pages/routines.html",
+            {"nav": _nav("/ui/routines"), "authorized": False},
         )
     return templates.TemplateResponse(
         request,
-        "pages/schedule.html",
+        "pages/routines.html",
         {
-            "nav": _nav("/ui/schedule"),
+            "nav": _nav("/ui/routines"),
             "authorized": True,
             "config": s.sched.cfg.model_dump(),
             "known_devices": [
@@ -104,29 +104,23 @@ async def library_page(request: Request) -> Any:
     )
 
 
-@router.get("/ui/collections", response_class=HTMLResponse)
-async def collections_page(request: Request) -> Any:
+@router.get("/ui/groups", response_class=HTMLResponse)
+async def groups_page(request: Request) -> Any:
+    s = _state(request)
     return templates.TemplateResponse(
         request,
-        "pages/stub.html",
-        {
-            "nav": _nav("/ui/collections"),
-            "title": "Collections",
-            "blurb": "Group cards into named collections (e.g. 'bedtime stories'). Later: per-collection volume caps and per-period allowed lists.",
-        },
+        "pages/groups.html",
+        {"nav": _nav("/ui/groups"), "authorized": s.authorized},
     )
 
 
 @router.get("/ui/events", response_class=HTMLResponse)
 async def events_page(request: Request) -> Any:
+    s = _state(request)
     return templates.TemplateResponse(
         request,
-        "pages/stub.html",
-        {
-            "nav": _nav("/ui/events"),
-            "title": "Events",
-            "blurb": "Schedule one-shot or recurring play events (e.g. play card X at 07:00 weekdays). Will map to Yoto's native alarms where possible.",
-        },
+        "pages/events.html",
+        {"nav": _nav("/ui/events"), "authorized": s.authorized},
     )
 
 

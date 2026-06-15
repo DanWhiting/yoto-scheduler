@@ -727,15 +727,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pytz"
-version = "2025.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f8/bf/abbd3cdfb8fbc7fb3d4d38d320f2441b1e7cbe29be4f23797b4a2b5d8aac/pytz-2025.2.tar.gz", hash = "sha256:360b9e3dbb49a209c21ad61809c7fb453643e048b38924c765813546746e81c3", size = 320884, upload-time = "2025-03-25T02:25:00.538Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/81/c4/34e93fe5f5429d7570ec1fa436f1986fb1f00c3e0f43a589fe2bbcd22c3f/pytz-2025.2-py2.py3-none-any.whl", hash = "sha256:5ddf76296dd8c44c26eb8f4b6f35488f3ccbf6fbbd7adee0b7262d43f0ec2f00", size = 509225, upload-time = "2025-03-25T02:24:58.468Z" },
-]
-
-[[package]]
 name = "pyyaml"
 version = "6.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1108,16 +1099,15 @@ wheels = [
 
 [[package]]
 name = "yoto-api"
-version = "2.5.0"
+version = "4.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "aiomqtt" },
-    { name = "pytz" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a6/14/40e4f9967a6462bae31a79ae419f4a50163ae4615638ffb099878dab5e31/yoto_api-2.5.0.tar.gz", hash = "sha256:ab36fa96154b0c3f966e397aa3dc1132813b07fd848601bf0ea945fb0caf188c", size = 56773, upload-time = "2026-05-15T16:39:59.404Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c5/a1/a2a9c1a4a52fbca29d875188c8f8931ac56487c60d8efe047265e45f26e7/yoto_api-4.2.1.tar.gz", hash = "sha256:430d089d7f5ea91340b23660f9ca50631506ee7a532f883a4b7fabd669393efa", size = 71230, upload-time = "2026-06-13T16:13:09.596Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9b/00/29b69c94971018138b541803e27cf569ba3158d9f32ab9529cd705368bab/yoto_api-2.5.0-py3-none-any.whl", hash = "sha256:593c7aff52e3afded1066bf623994f6639446d28b9f17ca28080b82b7ec2eaac", size = 44633, upload-time = "2026-05-15T16:39:58.369Z" },
+    { url = "https://files.pythonhosted.org/packages/94/24/a4ca92325d2ee20bcde3be2d9df1150a1d4e131ae77fbec0966d6f99603a/yoto_api-4.2.1-py3-none-any.whl", hash = "sha256:d4c165e86f4a7c99ae29f7b95e915acdfd33a4c32b56999c4901a1e7a2805de7", size = 51996, upload-time = "2026-06-13T16:13:08.169Z" },
 ]
 
 [[package]]
@@ -1138,5 +1128,5 @@ requires-dist = [
     { name = "jinja2", specifier = ">=3.1" },
     { name = "python-multipart", specifier = ">=0.0.20" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
-    { name = "yoto-api", specifier = ">=2.5.0" },
+    { name = "yoto-api", specifier = ">=4.2.1" },
 ]

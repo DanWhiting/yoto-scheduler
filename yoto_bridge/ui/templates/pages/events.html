@@ -1,0 +1,468 @@
+{% extends "base.html" %}
+{% block title %}Events · Yoto Scheduler{% endblock %}
+{% block content %}
+  <hgroup>
+    <h2>Events</h2>
+    <p>Schedule playback actions on specific days and times for each player.</p>
+  </hgroup>
+
+  {% if not authorized %}
+    <article>You need to connect your Yoto account first. <a href="/ui/settings">Go to settings.</a></article>
+  {% else %}
+
+  <script defer src="{{ url_for('static', path='vendor/alpine.min.js') }}"></script>
+
+  <div x-data="eventsEditor()" x-init="init()" x-cloak
+       @sl-input.debounce.500ms="autosave()"
+       @sl-change.debounce.300ms="autosave()">
+
+    <div x-show="loading"><sl-spinner></sl-spinner> Loading events…</div>
+    <sl-alert x-show="!loading && loadError" variant="danger" open>
+      <strong>Couldn't load events:</strong> <span x-text="loadError"></span>
+    </sl-alert>
+
+    <div x-show="!loading && !loadError">
+      <div class="player-selector" x-show="devices.length > 0">
+        <sl-radio-group
+            :value="selectedPlayerId"
+            @sl-change="selectedPlayerId = $event.target.value">
+          <template x-for="d in devices" :key="d.device_id">
+            <sl-radio-button :value="d.device_id" x-text="d.name"></sl-radio-button>
+          </template>
+        </sl-radio-group>
+      </div>
+
+      <div class="action-row">
+        <sl-button variant="primary" @click="addEvent()" :disabled="!selectedPlayerId">
+          <sl-icon slot="prefix" name="plus-lg"></sl-icon>
+          Add Event
+        </sl-button>
+        <sl-badge x-show="saveState === 'saving'" variant="neutral" pill>Saving…</sl-badge>
+        <sl-badge x-show="saveState === 'saved'"  variant="success" pill>Saved</sl-badge>
+        <sl-badge x-show="saveState === 'error'"  variant="danger"  pill
+                  x-text="'Error: ' + saveError"></sl-badge>
+      </div>
+
+      <template x-for="event in filteredEvents()" :key="event.id">
+        <article class="event-card" :class="{ 'event-card-incomplete': isIncomplete(event) }">
+          <sl-badge x-show="isIncomplete(event)" variant="warning" pill class="event-incomplete-badge">
+            Won't fire — pick a card
+          </sl-badge>
+          <sl-dropdown class="event-actions" placement="bottom-end" hoist>
+            <sl-icon-button slot="trigger" name="three-dots-vertical" label="Event actions"></sl-icon-button>
+            <sl-menu>
+              <sl-menu-item class="menu-item-destructive" @click="removeEvent(event.id)">
+                <sl-icon slot="prefix" name="trash3"></sl-icon>
+                Delete
+              </sl-menu-item>
+            </sl-menu>
+          </sl-dropdown>
+
+          {# Row 1: Enabled toggle. #}
+          <div class="event-row event-row-toggle">
+            <sl-switch :checked="event.enabled"
+                       @sl-change="event.enabled = $event.target.checked">
+              <span x-text="event.enabled ? 'Enabled' : 'Disabled'"></span>
+            </sl-switch>
+          </div>
+
+          {# Row 2: Time. #}
+          <div class="event-row">
+            <label class="event-time">
+              <small>Time</small>
+              <sl-input type="time"
+                        :value="event.time"
+                        @sl-input="event.time = $event.target.value || '12:00'"></sl-input>
+            </label>
+          </div>
+
+          {# Row 3: Days. #}
+          <div class="event-row">
+            <div class="event-days">
+              <small>Days</small>
+              <div class="day-chips" role="group" aria-label="Days of the week">
+                <template x-for="(label, idx) in ['M','T','W','T','F','S','S']" :key="idx">
+                  <button type="button"
+                          class="day-chip"
+                          :class="{ active: event.days_enabled[idx] === '1' }"
+                          @click="toggleDay(event, idx)"
+                          :aria-pressed="event.days_enabled[idx] === '1'"
+                          x-text="label"></button>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          {# Row 4: Action + (conditional) action-specific fields. #}
+          <div class="event-row event-row-action">
+            <label>
+              <small>Action</small>
+              <sl-select :value="event.action.type || 'card'"
+                         @sl-change="setActionType(event, $event.target.value)">
+                <sl-option value="card">Play a card</sl-option>
+                <sl-option value="radio" disabled>Play radio (coming soon)</sl-option>
+                <sl-option value="alarm_tone" disabled>Play alarm tone (coming soon)</sl-option>
+              </sl-select>
+            </label>
+
+            {# Card picker: button that opens the modal. Shows the currently
+               selected card's cover + title. #}
+            <div class="card-pick-wrap" x-show="event.action.type === 'card'">
+              <small class="caption">Card</small>
+              <button type="button"
+                      class="card-pick-trigger"
+                      @click="openCardPicker(event)">
+                <template x-if="cardById(event.action.card_id)">
+                  <span class="card-pick-current">
+                    <img :src="cardById(event.action.card_id).cover_image_large || ''"
+                         :alt="cardById(event.action.card_id).title || ''"
+                         referrerpolicy="no-referrer" />
+                    <span class="card-pick-title" x-text="cardById(event.action.card_id).title || '(untitled)'"></span>
+                  </span>
+                </template>
+                <template x-if="!cardById(event.action.card_id)">
+                  <span class="card-pick-placeholder">
+                    <sl-icon name="music-note-list"></sl-icon>
+                    Pick a card…
+                  </span>
+                </template>
+                <sl-icon name="chevron-right" class="card-pick-chevron"></sl-icon>
+              </button>
+            </div>
+          </div>
+
+          {# Row 4b: Track sub-picker (only when a card is selected). #}
+          <div class="event-row" x-show="event.action.type === 'card' && event.action.card_id">
+            <label>
+              <small>Track (optional — leave on "From start" to play the whole card)</small>
+              <sl-select :value="event.action.track_key || ''"
+                         @sl-change="setTrack(event, $event.target.value, $event.target)">
+                <sl-option value="">From start (whole card)</sl-option>
+                <template x-for="t in tracksForCard(event.action.card_id)" :key="t.chapter_key + ':' + t.key">
+                  <sl-option :value="t.chapter_key + ':' + t.key" x-text="t.label"></sl-option>
+                </template>
+              </sl-select>
+            </label>
+          </div>
+
+          {# Row 5: Volume. #}
+          <div class="event-row event-row-bottom">
+            <label class="event-volume volume-slider"
+                   :style="`--val: ${(Math.max(0, Math.min(16, event.volume || 0))/16*100)}%`">
+              <small>Volume</small>
+              <div class="slider-row">
+                <sl-range min="0" max="16" step="1"
+                          :value="event.volume"
+                          @sl-input="event.volume = parseInt($event.target.value, 10)"></sl-range>
+                <span class="value" x-text="event.volume"></span>
+              </div>
+            </label>
+          </div>
+        </article>
+      </template>
+
+      <div x-show="selectedPlayerId && !filteredEvents().length" class="empty-state">
+        <p><strong>No events for this player yet.</strong></p>
+        <p>Tap <em>+ Add Event</em> to schedule a card playback.</p>
+      </div>
+
+      <div x-show="!devices.length" class="empty-state">
+        <p>No players found on your account.</p>
+      </div>
+    </div>
+
+    {# Card-picker modal — shared across all event cards. #}
+    <sl-dialog label="Pick a Card"
+               class="card-picker-dialog"
+               :open="pickerOpen"
+               @sl-after-hide="pickerOpen = false">
+      <div class="card-picker-header">
+        <sl-input class="card-picker-search"
+                  placeholder="Search title, author, series…"
+                  clearable
+                  :value="pickerQuery"
+                  @sl-input="pickerQuery = $event.target.value">
+          <sl-icon slot="prefix" name="search"></sl-icon>
+        </sl-input>
+      </div>
+      <div class="card-picker-grid">
+        <template x-for="card in filteredPickerCards()" :key="card.id">
+          <button type="button"
+                  class="library-card picker-card-button"
+                  @click="pickCard(card)">
+            <div class="library-card-art">
+              <img :src="card.cover_image_large || ''"
+                   :alt="card.title || ''"
+                   loading="lazy"
+                   referrerpolicy="no-referrer"
+                   onerror="this.style.visibility='hidden'" />
+            </div>
+            <div class="library-card-text">
+              <p class="library-card-title" x-text="card.title || '(untitled)'"></p>
+              <p class="library-card-author" x-text="card.author || ''"></p>
+            </div>
+          </button>
+        </template>
+      </div>
+      <sl-button slot="footer" variant="default" @click="pickerOpen = false">Cancel</sl-button>
+    </sl-dialog>
+  </div>
+
+  <style>[x-cloak] { display: none !important; }</style>
+
+  <script>
+  function uid() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      try { return crypto.randomUUID(); } catch (_) {}
+    }
+    return 'e-' + Math.random().toString(36).slice(2) + '-' + Date.now().toString(36);
+  }
+
+  function eventsEditor() {
+    return {
+      devices: [],
+      cards: [],
+      cardIndex: {},
+      tracksByCard: {},   // card_id -> [{chapter_key, key, label}]
+      tracksLoading: {},  // card_id -> bool
+      events: [],
+      selectedPlayerId: null,
+
+      // Modal state
+      pickerOpen: false,
+      pickerQuery: '',
+      pickerEventId: null,
+
+      // Page state
+      loading: true,
+      loadError: '',
+      saveState: 'idle',
+      saveError: '',
+      _saveSeq: 0,
+      _lastDoneSeq: 0,
+
+      async init() {
+        this.loading = true;
+        this.loadError = '';
+        try {
+          const [evResp, libResp] = await Promise.all([
+            fetch('/events').then(r => r.ok ? r.json() : r.json().then(b => { throw new Error(b.detail || r.statusText); })),
+            fetch('/library').then(r => r.ok ? r.json() : []),
+          ]);
+          this.devices = evResp.known_devices || [];
+          this.events = (evResp.config.events || []).map(e => ({
+            ...e,
+            action: e.action || { type: 'card' },
+          }));
+          this.cards = libResp.sort((a, b) =>
+            (a.title || '').localeCompare(b.title || '')
+          );
+          this.cardIndex = Object.fromEntries(this.cards.map(c => [c.id, c]));
+          if (!this.selectedPlayerId && this.devices.length) {
+            this.selectedPlayerId = this.devices[0].device_id;
+          }
+          // Preload track lists for any card currently referenced by an event,
+          // so the track picker has something to show on initial render.
+          const seen = new Set();
+          for (const ev of this.events) {
+            const cid = ev.action && ev.action.card_id;
+            if (cid && !seen.has(cid)) {
+              seen.add(cid);
+              this.loadTracks(cid);  // fire-and-forget
+            }
+          }
+        } catch (e) {
+          this.loadError = e.message || String(e);
+        } finally {
+          this.loading = false;
+        }
+      },
+
+      filteredEvents() {
+        return this.events.filter(e => e.player_id === this.selectedPlayerId);
+      },
+
+      cardById(id) { return id ? this.cardIndex[id] || null : null; },
+
+      addEvent() {
+        if (!this.selectedPlayerId) return;
+        const firstCardId = (this.cards[0] && this.cards[0].id) || null;
+        this.events.push({
+          id: uid(),
+          player_id: this.selectedPlayerId,
+          name: '',
+          time: '12:00',
+          days_enabled: '1111111',
+          enabled: true,
+          volume: 8,
+          action: {
+            type: 'card',
+            card_id: firstCardId,
+            chapter_key: null,
+            track_key: null,
+            group_id: null,
+            radio_station: null,
+          },
+        });
+        if (firstCardId) this.loadTracks(firstCardId);
+        this.autosave();
+      },
+
+      removeEvent(id) {
+        this.events = this.events.filter(e => e.id !== id);
+        this.autosave();
+      },
+
+      setActionType(event, type) {
+        event.action.type = type;
+        this.autosave();
+      },
+
+      toggleDay(event, idx) {
+        const chars = event.days_enabled.split('');
+        chars[idx] = chars[idx] === '1' ? '0' : '1';
+        event.days_enabled = chars.join('');
+        this.autosave();
+      },
+
+      isIncomplete(event) {
+        if (!event.action) return true;
+        if (event.action.type === 'card') return !event.action.card_id;
+        return true;  // alarm_tone / radio not implemented yet
+      },
+
+      // ----- card picker modal -----
+
+      openCardPicker(event) {
+        this.pickerEventId = event.id;
+        this.pickerQuery = '';
+        this.pickerOpen = true;
+      },
+
+      filteredPickerCards() {
+        const q = (this.pickerQuery || '').trim().toLowerCase();
+        if (!q) return this.cards;
+        return this.cards.filter(c =>
+          (c.title || '').toLowerCase().includes(q) ||
+          (c.author || '').toLowerCase().includes(q) ||
+          (c.series_title || '').toLowerCase().includes(q)
+        );
+      },
+
+      pickCard(card) {
+        const event = this.events.find(e => e.id === this.pickerEventId);
+        if (event) {
+          event.action.card_id = card.id;
+          event.action.chapter_key = null;
+          event.action.track_key = null;
+          this.loadTracks(card.id);
+          this.autosave();
+        }
+        this.pickerOpen = false;
+      },
+
+      // ----- track loading -----
+
+      async loadTracks(cardId) {
+        if (this.tracksByCard[cardId] || this.tracksLoading[cardId]) return;
+        this.tracksLoading[cardId] = true;
+        try {
+          const resp = await fetch(`/library/${encodeURIComponent(cardId)}/tracks`);
+          if (!resp.ok) throw new Error(resp.statusText);
+          const data = await resp.json();
+          const flat = [];
+          for (const ch of (data.chapters || [])) {
+            for (const t of (ch.tracks || [])) {
+              const trackLabel = t.title || '(track)';
+              const chapterLabel = ch.title || '';
+              flat.push({
+                chapter_key: ch.key,
+                key: t.key,
+                label: chapterLabel && chapterLabel !== trackLabel
+                  ? `${chapterLabel} – ${trackLabel}`
+                  : trackLabel,
+              });
+            }
+          }
+          this.tracksByCard[cardId] = flat;
+        } catch (e) {
+          this.tracksByCard[cardId] = [];
+        } finally {
+          this.tracksLoading[cardId] = false;
+        }
+      },
+
+      tracksForCard(cardId) {
+        if (!cardId) return [];
+        if (!(cardId in this.tracksByCard) && !this.tracksLoading[cardId]) {
+          this.loadTracks(cardId);
+        }
+        return this.tracksByCard[cardId] || [];
+      },
+
+      setTrack(event, comboKey) {
+        if (!comboKey) {
+          event.action.chapter_key = null;
+          event.action.track_key = null;
+        } else {
+          const [chapter_key, track_key] = comboKey.split(':');
+          event.action.chapter_key = chapter_key || null;
+          event.action.track_key = track_key || null;
+        }
+        this.autosave();
+      },
+
+      buildPayload() {
+        const events = this.events.map(e => ({
+          id: e.id,
+          player_id: e.player_id,
+          name: e.name && e.name.trim() ? e.name.trim() : null,
+          time: e.time,
+          days_enabled: e.days_enabled,
+          enabled: !!e.enabled,
+          volume: e.volume,
+          action: e.action,
+        }));
+        return { events };
+      },
+
+      autosave() {
+        if (this.loading) return;
+        this.save();
+      },
+
+      async save() {
+        const seq = ++this._saveSeq;
+        this.saveState = 'saving';
+        try {
+          const resp = await fetch('/events', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(this.buildPayload()),
+          });
+          if (seq < this._lastDoneSeq) return;
+          this._lastDoneSeq = seq;
+          if (!resp.ok) {
+            const body = await resp.json().catch(() => ({}));
+            throw new Error(body.detail || resp.statusText);
+          }
+          this.saveState = 'saved';
+          const stamp = seq;
+          setTimeout(() => {
+            if (this._lastDoneSeq === stamp && this.saveState === 'saved') {
+              this.saveState = 'idle';
+            }
+          }, 1500);
+        } catch (e) {
+          if (seq >= this._lastDoneSeq) {
+            this._lastDoneSeq = seq;
+            this.saveState = 'error';
+            this.saveError = e.message;
+          }
+        }
+      },
+    };
+  }
+  </script>
+  {% endif %}
+{% endblock %}

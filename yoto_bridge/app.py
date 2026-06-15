@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from yoto_api import YotoClient, YotoError
 
-from . import auth, config, scheduler, storage
+from . import auth, config, events, scheduler, storage
 from .ui import routes as ui_routes
 
 log = logging.getLogger(__name__)
@@ -30,6 +30,7 @@ class State:
     auth_flow: auth.AuthFlow | None = None
     events_task: asyncio.Task[Any] | None = None
     sched: scheduler.Scheduler | None = None
+    events_runner: events.EventsRunner | None = None
 
 
 async def _bring_online(state: State, blob: dict) -> None:
@@ -43,6 +44,8 @@ async def _bring_online(state: State, blob: dict) -> None:
     _start_events(state)
     state.sched = scheduler.Scheduler(state.client)
     await state.sched.start()
+    state.events_runner = events.EventsRunner(state.client)
+    await state.events_runner.start()
 
 
 def _persist_rotated_refresh_token(blob: dict, refresh_token: str | None) -> None:
@@ -110,6 +113,8 @@ async def lifespan(app: FastAPI):
                     _persist_rotated_refresh_token(current_blob, current_token.refresh_token)
             except Exception:  # noqa: BLE001
                 log.exception("Failed to persist refresh token on shutdown.")
+        if state.events_runner is not None:
+            await state.events_runner.stop()
         if state.sched is not None:
             await state.sched.stop()
         if state.auth_flow is not None:
@@ -245,18 +250,17 @@ def _enum_name(value: Any) -> Any:
 
 
 def _serialize_status(status: Any) -> dict:
+    # yoto-api 4.x: PlayerStatus has the minimal MQTT fields only; the extras
+    # (power_source, network, wifi) moved to PlayerExtendedStatus. is_online
+    # moved to YotoPlayer itself. We only surface fields we can rely on.
     return {
-        "is_online": status.is_online,
         "battery_level_percentage": status.battery_level_percentage,
         "is_charging": status.is_charging,
-        "power_source": _enum_name(status.power_source),
         "active_card": status.active_card,
         "card_insertion_state": _enum_name(status.card_insertion_state),
         "system_volume_percentage": status.system_volume_percentage,
         "user_volume_percentage": status.user_volume_percentage,
         "day_mode": _enum_name(status.day_mode),
-        "network_ssid": status.network_ssid,
-        "wifi_strength": status.wifi_strength,
     }
 
 
@@ -280,6 +284,7 @@ def _serialize_player(device_id: str, player: Any) -> dict:
         "device_id": device_id,
         "name": player.name,
         "model": player.model,
+        "is_online": getattr(player, "is_online", None),
         "status": _serialize_status(player.status),
         "last_event": _serialize_event(player.last_event),
     }
@@ -315,6 +320,96 @@ async def list_library(refresh: bool = False) -> list[dict]:
         except YotoError as e:
             raise HTTPException(status_code=502, detail=str(e))
     return [_serialize_card(c) for c in s.client.library.values()]
+
+
+@app.get("/library/{card_id}/tracks")
+async def get_card_tracks(card_id: str) -> dict:
+    """Return the chapters + tracks of a card, fetching detail if needed."""
+    s = _state()
+    _require_authorized(s)
+    # Make sure we know about the card.
+    if not s.client.library:
+        try:
+            await s.client.update_library()
+        except YotoError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+    if card_id not in s.client.library:
+        raise HTTPException(status_code=404, detail=f"Card {card_id} not in library")
+    # Hydrate chapters/tracks for this card.
+    try:
+        await s.client.update_card_detail(card_id)
+    except YotoError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    card = s.client.library[card_id]
+    chapters_out: list[dict] = []
+    chapters = card.chapters or {}
+    # The library returns chapters either as a dict keyed by chapter_key or as
+    # a list — handle both gracefully.
+    iterable = chapters.items() if isinstance(chapters, dict) else enumerate(chapters)
+    for ck, chapter in iterable:
+        chapter_key = getattr(chapter, "key", None) or str(ck)
+        tracks_out: list[dict] = []
+        tracks = getattr(chapter, "tracks", None) or {}
+        track_iter = tracks.items() if isinstance(tracks, dict) else enumerate(tracks)
+        for tk, track in track_iter:
+            tracks_out.append({
+                "key": getattr(track, "key", None) or str(tk),
+                "title": getattr(track, "title", None),
+                "duration": getattr(track, "duration", None),
+            })
+        chapters_out.append({
+            "key": chapter_key,
+            "title": getattr(chapter, "title", None),
+            "duration": getattr(chapter, "duration", None),
+            "tracks": tracks_out,
+        })
+    return {"card_id": card_id, "title": card.title, "chapters": chapters_out}
+
+
+@app.get("/groups")
+async def list_groups(refresh: bool = False) -> list[dict]:
+    """Return the family's library groups, with each group's cards enriched
+    from `client.library` so the UI doesn't need a second fetch.
+    """
+    s = _state()
+    _require_authorized(s)
+    if refresh or not s.client.groups:
+        try:
+            await s.client.update_groups()
+        except YotoError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+    # Ensure library is loaded so we can resolve card_ids to titles + covers.
+    if not s.client.library:
+        try:
+            await s.client.update_library()
+        except YotoError as e:
+            log.warning("Couldn't load library for group enrichment: %s", e)
+
+    out: list[dict] = []
+    for group in s.client.groups.values():
+        cards: list[dict] = []
+        for card_id in group.card_ids:
+            card = s.client.library.get(card_id)
+            if card is not None:
+                cards.append(_serialize_card(card))
+            else:
+                # Card is referenced in the group but missing from the library
+                # response — still surface the id so the UI can show a placeholder.
+                cards.append({
+                    "id": card_id, "title": None, "author": None,
+                    "category": None, "cover_image_large": None,
+                    "series_title": None, "series_order": None,
+                })
+        out.append({
+            "id": group.id,
+            "name": group.name,
+            "image_url": group.image_url,
+            "card_count": len(group.card_ids),
+            "cards": cards,
+        })
+    out.sort(key=lambda g: (g.get("name") or "").lower())
+    return out
 
 
 @app.post("/players/{device_id}/refresh")
@@ -478,3 +573,33 @@ async def put_schedule(body: scheduler.ScheduleConfig) -> dict:
     sch = _require_scheduler(s)
     await sch.reload(body)
     return {"ok": True, "config": sch.cfg.model_dump()}
+
+
+# --- events ----------------------------------------------------------------
+
+
+def _require_events(s: State) -> events.EventsRunner:
+    _require_authorized(s)
+    if s.events_runner is None:
+        raise HTTPException(status_code=503, detail="Events runner not initialised")
+    return s.events_runner
+
+
+@app.get("/events")
+async def get_events() -> dict:
+    s = _state()
+    runner = _require_events(s)
+    return {
+        "config": runner.cfg.model_dump(),
+        "known_devices": [
+            {"device_id": d, "name": p.name} for d, p in s.client.players.items()
+        ],
+    }
+
+
+@app.put("/events")
+async def put_events(body: events.EventsConfig) -> dict:
+    s = _state()
+    runner = _require_events(s)
+    await runner.reload(body)
+    return {"ok": True, "config": runner.cfg.model_dump()}

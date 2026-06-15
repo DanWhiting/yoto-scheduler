@@ -400,6 +400,352 @@ sl-menu-item.menu-item-destructive sl-icon { color: var(--ys-error); }
 }
 
 
+/* ----- Card picker (trigger button + modal grid) -------- */
+
+.card-pick-wrap { display: block; }
+.card-pick-wrap .caption {
+  display: block;
+  color: var(--ys-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.3rem;
+}
+
+.card-pick-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--ys-border-strong);
+  border-radius: var(--ys-radius-sm);
+  background: var(--ys-surface);
+  color: var(--ys-text);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.95rem;
+  text-align: left;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.card-pick-trigger:hover {
+  border-color: var(--ys-primary);
+  background: var(--ys-primary-soft);
+}
+.card-pick-trigger:focus-visible {
+  outline: none;
+  border-color: var(--ys-primary);
+  box-shadow: 0 0 0 3px var(--ys-primary-soft);
+}
+.card-pick-current {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+  flex: 1;
+}
+.card-pick-current img {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: var(--ys-radius-xs);
+  object-fit: cover;
+  background: var(--ys-track-bg);
+  flex-shrink: 0;
+}
+.card-pick-title {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-pick-placeholder {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--ys-muted);
+  font-style: italic;
+}
+.card-pick-chevron {
+  color: var(--ys-muted);
+  flex-shrink: 0;
+}
+
+/* Shoelace dialog overrides for the picker. */
+.card-picker-dialog::part(panel) {
+  max-width: 36rem;
+  width: min(90vw, 36rem);
+}
+.card-picker-dialog::part(body) {
+  padding-top: 0.5rem;
+}
+.card-picker-header { margin: 0 0 0.85rem; }
+.card-picker-search { width: 100%; }
+
+.card-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.75rem;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 0.15rem;  /* breathing room for focus rings */
+}
+
+/* The picker reuses .library-card visuals but wraps a <button> for tap. */
+.picker-card-button {
+  display: flex;
+  flex-direction: column;
+  background: var(--ys-surface);
+  border: 1px solid var(--ys-border);
+  border-radius: var(--ys-radius);
+  overflow: hidden;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--ys-text);
+  transition: box-shadow 120ms ease, transform 120ms ease, border-color 120ms ease;
+}
+.picker-card-button:hover {
+  border-color: var(--ys-primary);
+  box-shadow: var(--ys-shadow-hover);
+  transform: translateY(-2px);
+}
+.picker-card-button:focus-visible {
+  outline: none;
+  border-color: var(--ys-primary);
+  box-shadow: 0 0 0 3px var(--ys-primary-soft);
+}
+
+
+/* ----- Events page --------------------------------------- */
+
+.player-selector {
+  margin: 0 0 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.player-selector sl-radio-group { width: 100%; }
+
+/* Shoelace sl-radio-button uses `part="button"` on the inner button. Default
+ * grouping doesn't round the outermost edges of the first / last item, so
+ * we fix that here. */
+.player-selector sl-radio-button::part(button) { border-radius: 0; }
+.player-selector sl-radio-button:first-of-type::part(button) {
+  border-top-left-radius: var(--ys-radius-sm);
+  border-bottom-left-radius: var(--ys-radius-sm);
+}
+.player-selector sl-radio-button:last-of-type::part(button) {
+  border-top-right-radius: var(--ys-radius-sm);
+  border-bottom-right-radius: var(--ys-radius-sm);
+}
+
+.event-card {
+  position: relative;
+  background: var(--ys-surface);
+  border: 1px solid var(--ys-border);
+  border-radius: var(--ys-radius);
+  padding: 1rem 1.25rem 1.1rem;
+  margin: 0 0 0.85rem;
+  box-shadow: var(--ys-shadow);
+  transition: box-shadow 150ms ease;
+}
+.event-card:hover { box-shadow: var(--ys-shadow-hover); }
+
+.event-card-incomplete {
+  border-color: var(--ys-error);
+  background: linear-gradient(0deg, var(--ys-surface), var(--ys-surface)) padding-box,
+              var(--ys-error-soft) border-box;
+}
+.event-incomplete-badge {
+  position: absolute;
+  top: -0.55rem;
+  left: 1rem;
+  z-index: 1;
+}
+
+.event-actions {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+}
+.event-actions sl-icon-button {
+  color: var(--ys-muted);
+  transition: color 120ms ease;
+}
+.event-actions sl-icon-button:hover { color: var(--ys-text); }
+
+.event-row {
+  margin-bottom: 0.9rem;
+  padding-right: 2rem; /* leave space for the absolutely-positioned menu */
+}
+.event-row:last-child { margin-bottom: 0; }
+.event-row label { margin: 0; display: block; }
+.event-row sl-input,
+.event-row sl-select,
+.event-row sl-range { display: block; width: 100%; }
+
+.event-row-toggle {
+  /* Sits at the top of the card, next to the 3-dot menu. */
+  padding-right: 2.5rem;
+  margin-bottom: 0.9rem;
+}
+.event-time sl-input { width: 9rem; display: inline-block; }
+
+.event-row-action {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 1rem;
+  align-items: end;
+}
+.event-row-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: end;
+}
+
+.event-volume .slider-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.event-volume .slider-row sl-range { flex: 1; }
+.event-volume .slider-row .value {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--ys-text);
+  background: var(--ys-track-bg);
+  border-radius: var(--ys-radius-pill);
+  padding: 0.15rem 0.55rem;
+  min-width: 2rem;
+  text-align: center;
+}
+
+/* Day-of-week selector: a single segmented control matching the visual
+ * language of the player selector at the top of the page. */
+.event-days small {
+  display: block;
+  color: var(--ys-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.4rem;
+}
+.day-chips {
+  display: inline-flex;
+  margin: 0;
+  padding: 0;
+  background: var(--ys-surface);
+  border: 1px solid var(--ys-border-strong);
+  border-radius: var(--ys-radius-sm);
+  overflow: hidden;  /* clip the inner segments to the rounded outer shape */
+}
+.day-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  margin: 0 !important;  /* override Pico's button:not(:first-of-type) margin */
+  padding: 0;
+  border: none;
+  border-right: 1px solid var(--ys-border-strong);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ys-muted);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.8rem;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: background 120ms ease, color 120ms ease;
+}
+.day-chip:last-of-type { border-right: none; }
+.day-chip:hover {
+  background: var(--ys-primary-soft);
+  color: var(--ys-text);
+}
+.day-chip.active {
+  background: var(--ys-primary);
+  color: #fff;
+}
+
+@media (max-width: 600px) {
+  .event-row-primary,
+  .event-row-action,
+  .event-row-bottom {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* ----- Groups page (read-only viewer) -------------------- */
+
+.group-section {
+  background: var(--ys-surface);
+  border: 1px solid var(--ys-border);
+  border-radius: var(--ys-radius);
+  padding: 1rem 1.25rem 1.1rem;
+  margin: 0 0 1rem;
+  box-shadow: var(--ys-shadow);
+}
+.group-section-head {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin: 0 0 0.85rem;
+  padding: 0;
+  background: none;
+}
+.group-section-head hgroup { margin: 0; }
+.group-section-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--ys-text);
+}
+.group-section-head small { color: var(--ys-muted); font-size: 0.85rem; }
+
+.group-cover {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: var(--ys-radius-sm);
+  object-fit: cover;
+  background: var(--ys-track-bg);
+  flex-shrink: 0;
+}
+
+/* Horizontal scrolling strip of cards inside a group. Reuses .library-card. */
+.group-card-strip {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.85rem;
+  overflow-x: auto;
+  padding-bottom: 0.35rem;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.group-card-strip .library-card {
+  flex: 0 0 9.5rem;
+  scroll-snap-align: start;
+}
+.group-card-strip .library-card:hover { transform: none; }  /* no lift inside a scroll strip */
+
+.muted-note {
+  color: var(--ys-muted);
+  font-size: 0.9rem;
+  font-style: italic;
+  margin: 0;
+}
+
+
 /* ----- Library page -------------------------------------- */
 
 .library-actions { gap: 0.75rem; align-items: center; }

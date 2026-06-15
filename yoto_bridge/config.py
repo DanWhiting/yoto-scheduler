@@ -14,6 +14,7 @@ LOG_LEVEL = os.environ.get("YOTO_BRIDGE_LOG_LEVEL", "info")
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TOKEN_FILE = Path(os.environ.get("YOTO_TOKEN_FILE", str(_PROJECT_ROOT / "yoto_tokens.json")))
 SCHEDULE_FILE = Path(os.environ.get("YOTO_SCHEDULE_FILE", str(_PROJECT_ROOT / "schedule.json")))
+EVENTS_FILE   = Path(os.environ.get("YOTO_EVENTS_FILE",   str(_PROJECT_ROOT / "events.json")))
 
 YOTO_AUTH_URL = "https://login.yotoplay.com/oauth/device/code"
 YOTO_TOKEN_URL = "https://login.yotoplay.com/oauth/token"

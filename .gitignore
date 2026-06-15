@@ -12,3 +12,4 @@ wheels/
 # Local runtime state (per-deployment)
 yoto_tokens.json
 schedule.json
+events.json
