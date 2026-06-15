@@ -19,11 +19,20 @@
   --ys-error-soft:   rgba(198, 40, 40, 0.10);
   --ys-track-bg:     #ece6d7;
 
-  --ys-radius:    14px;
+  --ys-radius-xs: 4px;
   --ys-radius-sm: 10px;
+  --ys-radius:    14px;
+  --ys-radius-lg: 20px;
+  --ys-radius-pill: 999px;
+
+  /* Three elevation levels (see STYLE.md). Level 3 reserved for modals. */
   --ys-shadow:        0 1px 2px rgba(20, 12, 0, 0.04), 0 4px 14px rgba(20, 12, 0, 0.05);
   --ys-shadow-hover:  0 1px 2px rgba(20, 12, 0, 0.06), 0 10px 24px rgba(20, 12, 0, 0.07);
+  --ys-shadow-3:      0 4px 8px rgba(20, 12, 0, 0.08), 0 20px 40px rgba(20, 12, 0, 0.12);
   --ys-shadow-thumb:  0 2px 6px rgba(20, 12, 0, 0.18);
+
+  /* Touch-target minimum (Material 48 / iOS 44). */
+  --ys-tap-target: 2.75rem;
 
   /* Override Pico tokens we want to recolour. */
   --pico-primary: var(--ys-primary);
@@ -36,6 +45,33 @@
   --pico-card-border-color: var(--ys-border);
   --pico-border-radius: var(--ys-radius-sm);
   --pico-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Helvetica Neue", Arial, sans-serif;
+
+  /* Theme Shoelace to match our palette. Only override the steps Shoelace
+   * components actually read; the rest defaults to Shoelace's neutral scale. */
+  --sl-color-primary-50:  #fff2ee;
+  --sl-color-primary-100: #ffd7c9;
+  --sl-color-primary-200: #ffb29c;
+  --sl-color-primary-300: #ff8a6c;
+  --sl-color-primary-400: #f4684a;
+  --sl-color-primary-500: var(--ys-primary);
+  --sl-color-primary-600: var(--ys-primary-deep);
+  --sl-color-primary-700: #b04025;
+  --sl-color-primary-800: #8b321d;
+  --sl-color-primary-900: #5e2113;
+  --sl-color-primary-950: #3a1209;
+
+  --sl-input-border-radius-medium: var(--ys-radius-sm);
+  --sl-input-border-color: var(--ys-border-strong);
+  --sl-input-border-color-focus: var(--ys-primary);
+  --sl-input-focus-ring-color: var(--ys-primary-soft);
+  --sl-input-background-color: var(--ys-surface);
+
+  --sl-button-font-weight: 600;
+  --sl-border-radius-medium: var(--ys-radius-sm);
+  --sl-border-radius-large: var(--ys-radius);
+  --sl-border-radius-pill: 999px;
+
+  --sl-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Helvetica Neue", Arial, sans-serif;
 }
 
 body {
@@ -59,34 +95,48 @@ main.container { padding-block: 1.5rem 4rem; }
 .app-header nav { padding: 0; }
 .app-header nav ul.nav-links {
   display: flex;
-  gap: 0.25rem;
   flex-wrap: wrap;
+  gap: 0.35rem;
   list-style: none;
   margin: 0;
   padding: 0;
+  justify-content: flex-start;
 }
-.app-header nav ul.nav-links li { padding: 0; margin: 0; }
+.app-header nav ul.nav-links li {
+  display: block;
+  margin: 0;
+  padding: 0;
+}
+
 .app-header nav a {
-  display: inline-block;
-  padding: 0.5rem 1rem;
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  padding: 0.4rem 0.9rem;
+  background: var(--ys-surface);
+  border: 1px solid var(--ys-border);
   color: var(--ys-muted);
+  font-size: 0.92rem;
   font-weight: 500;
   text-decoration: none;
-  border-radius: 999px;
-  transition: background 120ms ease, color 120ms ease;
+  border-radius: var(--ys-radius-sm);
+  line-height: 1.4;
+  white-space: nowrap;
+  box-sizing: border-box;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
 }
 .app-header nav a:hover {
   background: var(--ys-primary-soft);
+  border-color: var(--ys-primary-soft);
   color: var(--ys-text);
 }
-.app-header nav a[aria-current="page"] {
+.app-header nav a[aria-current="page"],
+.app-header nav a[aria-current="page"]:hover {
   background: var(--ys-primary);
+  border-color: var(--ys-primary);
   color: #fff;
 }
-.app-header nav a[aria-current="page"]:hover {
-  background: var(--ys-primary-deep);
-}
-.nav-stub { opacity: 0.4; pointer-events: none; }
+.nav-stub { opacity: 0.45; pointer-events: none; }
 
 
 /* ----- Inputs & labels --------------------------------------- */
@@ -118,7 +168,8 @@ textarea:focus {
 }
 input::placeholder { color: var(--ys-muted); }
 
-/* Small label captions used in card rows */
+/* Reusable caption (uppercase muted label). Was: label > small. */
+.caption,
 label > small {
   display: block;
   color: var(--ys-muted);
@@ -130,127 +181,34 @@ label > small {
 }
 
 
-/* ----- Buttons ----------------------------------------------- */
+/* ----- Touch targets (44px min, see STYLE.md) ---------------- */
 
-button, [role="button"] {
-  font-weight: 600;
-  border-radius: 999px;
-  padding: 0.55rem 1.15rem;
-  border: 1px solid transparent;
-  transition: transform 80ms ease, box-shadow 120ms ease, background 120ms ease, border-color 120ms ease, color 120ms ease;
-  cursor: pointer;
-}
-button:not(:disabled):hover, [role="button"]:not(:disabled):hover {
-  transform: translateY(-1px);
-}
-button:not(:disabled):active, [role="button"]:not(:disabled):active {
-  transform: translateY(0);
-}
-button:disabled, [role="button"][aria-disabled="true"] {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-}
-button.secondary {
-  background: var(--ys-surface);
-  border-color: var(--ys-border-strong);
-  color: var(--ys-text);
-}
-button.secondary:not(:disabled):hover {
-  background: var(--ys-primary-soft);
-  border-color: var(--ys-primary);
-  color: var(--ys-text);
-}
-button.outline {
-  background: transparent;
-  border-color: var(--ys-border-strong);
-  color: var(--ys-text);
-}
-
-
-/* ----- Range slider (volume cap) ----------------------------- */
-
-.volume-slider .slider-row {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-}
-.volume-slider .slider-row .value {
+sl-icon-button::part(base) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  font-size: 1.05rem;
-  color: var(--ys-text);
-  background: var(--ys-track-bg);
-  border-radius: 999px;
-  padding: 0.2rem 0.65rem;
-  min-width: 2.4rem;
+  min-width: var(--ys-tap-target);
+  min-height: var(--ys-tap-target);
+  border-radius: var(--ys-radius-pill);
 }
 
-input[type="range"] {
-  flex: 1;
-  -webkit-appearance: none;
-  appearance: none;
-  background: transparent;
-  height: 1.5rem;
-  padding: 0;
-  margin: 0;
-  border: none;
-  box-shadow: none;
-}
-input[type="range"]:focus { outline: none; box-shadow: none; }
-input[type="range"]:focus::-webkit-slider-thumb { box-shadow: 0 0 0 4px var(--ys-primary-soft), var(--ys-shadow-thumb); }
-input[type="range"]:focus::-moz-range-thumb     { box-shadow: 0 0 0 4px var(--ys-primary-soft), var(--ys-shadow-thumb); }
 
-input[type="range"]::-webkit-slider-runnable-track {
-  height: 6px;
-  border-radius: 3px;
-  background: linear-gradient(
-    to right,
-    var(--ys-primary) 0%,
-    var(--ys-primary) var(--val, 50%),
-    var(--ys-track-bg) var(--val, 50%),
-    var(--ys-track-bg) 100%
-  );
+/* ----- Reduced motion --------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
-input[type="range"]::-moz-range-track {
-  height: 6px;
-  border-radius: 3px;
-  background: linear-gradient(
-    to right,
-    var(--ys-primary) 0%,
-    var(--ys-primary) var(--val, 50%),
-    var(--ys-track-bg) var(--val, 50%),
-    var(--ys-track-bg) 100%
-  );
-}
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 22px; height: 22px;
-  margin-top: -8px;
-  border-radius: 50%;
-  background: #fff;
-  border: 3px solid var(--ys-primary);
-  box-shadow: var(--ys-shadow-thumb);
-  cursor: grab;
-}
-input[type="range"]::-moz-range-thumb {
-  width: 22px; height: 22px;
-  border-radius: 50%;
-  background: #fff;
-  border: 3px solid var(--ys-primary);
-  box-shadow: var(--ys-shadow-thumb);
-  cursor: grab;
-}
-input[type="range"]:active::-webkit-slider-thumb,
-input[type="range"]:active::-moz-range-thumb { cursor: grabbing; }
 
 
 /* ----- Routine cards ----------------------------------------- */
 
 .routine-card {
+  position: relative;
   background: var(--ys-surface);
   border: 1px solid var(--ys-border);
   border-radius: var(--ys-radius);
@@ -261,42 +219,84 @@ input[type="range"]:active::-moz-range-thumb { cursor: grabbing; }
 }
 .routine-card:hover { box-shadow: var(--ys-shadow-hover); }
 
+.routine-actions {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+}
+.routine-actions sl-icon-button {
+  font-size: 1.15rem;
+  color: var(--ys-muted);
+  transition: color 120ms ease;
+}
+.routine-actions sl-icon-button:hover { color: var(--ys-text); }
+
+/* Destructive menu item (Delete). Shoelace doesn't have a built-in variant. */
+sl-menu-item.menu-item-destructive::part(base) { color: var(--ys-error); }
+sl-menu-item.menu-item-destructive sl-icon { color: var(--ys-error); }
+
 .routine-head {
   display: grid;
-  grid-template-columns: 1.4fr 2fr auto;
+  grid-template-columns: 1.4fr 2fr;
   gap: 1rem;
   align-items: end;
   margin-bottom: 1rem;
+  /* Leave room for the absolutely-positioned delete button in the corner. */
+  padding-right: 2rem;
 }
-.routine-head label { margin: 0; }
-
-.routine-delete {
-  align-self: end;
-  padding: 0.45rem 0.75rem;
-  background: transparent;
-  border: 1px solid var(--ys-border-strong);
-  color: var(--ys-muted);
-  border-radius: 999px;
-  font-size: 0.95rem;
-  line-height: 1;
-}
-.routine-delete:not(:disabled):hover {
-  background: var(--ys-error-soft);
-  border-color: rgba(198, 40, 40, 0.35);
-  color: var(--ys-error);
-}
+.routine-head label,
+.routine-head .field { margin: 0; }
 
 .player-times {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 0.85rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem 1.25rem;
   padding-top: 0.85rem;
   border-top: 1px solid var(--ys-border);
 }
-.player-times label { margin: 0; }
+.player-times label,
+.player-times .field { margin: 0; flex: 0 0 auto; }
+/* Time inputs only need to display "HH:MM" + the native picker icon —
+ * a fixed width reads more like a label than a full-width form field. */
+.player-times sl-input {
+  display: inline-block;
+  width: 9rem;
+}
 
 
-/* ----- Action row + autosave pill ---------------------------- */
+/* ----- Shoelace sizing inside our layouts -------------------- */
+
+/* Default Shoelace inputs to fill their grid cell. */
+.routine-card sl-input,
+.routine-card sl-range { display: block; }
+
+/* ----- Routine name display ---------------------------------- */
+
+.name-display {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.2rem;
+}
+.name-text {
+  flex: 1;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--ys-text);
+  line-height: 1.3;
+  word-break: break-word;
+}
+.name-text-empty {
+  font-weight: 400;
+  font-style: italic;
+  color: var(--ys-muted);
+}
+
+/* The volume slider value pill is the built-in tooltip; we add a small label
+ * via the help-text slot inside the markup. */
+
+
+/* ----- Action row -------------------------------------------- */
 
 .action-row {
   display: flex;
@@ -305,23 +305,164 @@ input[type="range"]:active::-moz-range-thumb { cursor: grabbing; }
   flex-wrap: wrap;
   margin-bottom: 1.25rem;
 }
-.action-row button { margin: 0; }
 
-.save-state {
+
+/* ----- Settings page ------------------------------------- */
+
+.settings-card {
+  background: var(--ys-surface);
+  border: 1px solid var(--ys-border);
+  border-radius: var(--ys-radius);
+  padding: 1.25rem 1.5rem;
+  margin: 0 0 1rem;
+  box-shadow: var(--ys-shadow);
+}
+
+.settings-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  background: none;
+}
+.settings-card-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--ys-text);
+}
+
+.settings-blurb {
+  color: var(--ys-muted);
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+}
+
+.settings-card-foot { margin: 0; padding: 0; background: none; }
+.settings-card-foot form { margin: 0; }
+
+/* Stat rows: row label on the left, value on the right. */
+.stat-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0 0 1.25rem;
+  padding: 0;
+}
+.stat-list .stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.6rem 0.85rem;
+  background: var(--ys-track-bg);
+  border-radius: var(--ys-radius-sm);
+}
+.stat-list dt {
+  margin: 0;
+  font-weight: 500;
+  color: var(--ys-muted);
+  font-size: 0.92rem;
+}
+.stat-list dd {
+  margin: 0;
+  font-weight: 600;
+  color: var(--ys-text);
+}
+
+/* Auth flow */
+.auth-alt {
+  color: var(--ys-muted);
+  font-size: 0.9rem;
+  margin: 1rem 0;
+}
+.auth-alt code,
+.auth-code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  background: var(--ys-track-bg);
+  color: var(--ys-text);
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--ys-radius-xs);
+  font-size: 0.95em;
+}
+.auth-code { font-weight: 600; }
+
+.auth-status {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.82rem;
-  font-weight: 500;
-  padding: 0.3rem 0.7rem;
-  border-radius: 999px;
+  gap: 0.55rem;
+  padding: 0.55rem 0.85rem;
+  background: var(--ys-track-bg);
+  border-radius: var(--ys-radius-pill);
   color: var(--ys-muted);
-  transition: opacity 200ms ease;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
 }
-.save-state:empty { display: none; }
-.save-state.saving { background: var(--ys-track-bg); color: var(--ys-muted); }
-.save-state.saved  { background: var(--ys-success-soft); color: var(--ys-success); }
-.save-state.error  { background: var(--ys-error-soft);   color: var(--ys-error); }
+
+
+/* ----- Library page -------------------------------------- */
+
+.library-actions { gap: 0.75rem; align-items: center; }
+.library-actions .library-search { flex: 1 1 18rem; min-width: 0; }
+.library-actions sl-button { white-space: nowrap; }
+.library-count { white-space: nowrap; margin: 0; }
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.library-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--ys-surface);
+  border: 1px solid var(--ys-border);
+  border-radius: var(--ys-radius);
+  overflow: hidden;
+  padding: 0;
+  margin: 0;
+  box-shadow: var(--ys-shadow);
+  transition: box-shadow 150ms ease, transform 150ms ease;
+}
+.library-card:hover {
+  box-shadow: var(--ys-shadow-hover);
+  transform: translateY(-2px);
+}
+.library-card-art {
+  aspect-ratio: 1 / 1;
+  background: var(--ys-track-bg);
+  position: relative;
+}
+.library-card-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.library-card-text {
+  padding: 0.55rem 0.75rem 0.8rem;
+}
+.library-card-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.3;
+  margin: 0 0 0.2rem;
+  /* Clamp to 2 lines so the grid stays tidy. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.library-card-author {
+  color: var(--ys-muted);
+  font-size: 0.8rem;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 
 /* ----- Empty / hint --------------------------------------- */
@@ -336,10 +477,11 @@ input[type="range"]:active::-moz-range-thumb { cursor: grabbing; }
 }
 .empty-state strong { color: var(--ys-text); }
 
+hgroup h2 { margin-bottom: 0.6rem; }
 hgroup p {
   color: var(--ys-muted);
   font-size: 0.95rem;
-  margin-top: -0.25rem;
+  margin-top: 0;
 }
 
 
@@ -365,10 +507,8 @@ hgroup p {
 
 @media (max-width: 600px) {
   .routine-head {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr;
     gap: 0.75rem;
   }
-  .routine-head .routine-name { grid-column: 1 / -1; }
-  .routine-head .routine-cap  { grid-column: 1 / span 1; }
   .app-title { font-size: 1.4rem; }
 }

@@ -292,6 +292,31 @@ async def list_players() -> list[dict]:
     return [_serialize_player(d, p) for d, p in s.client.players.items()]
 
 
+def _serialize_card(card: Any) -> dict:
+    return {
+        "id": card.id,
+        "title": card.title,
+        "author": card.author,
+        "category": card.category,
+        "cover_image_large": card.cover_image_large,
+        "series_title": card.series_title,
+        "series_order": card.series_order,
+    }
+
+
+@app.get("/library")
+async def list_library(refresh: bool = False) -> list[dict]:
+    """Return the family's card library. Pass ?refresh=1 to re-fetch from Yoto."""
+    s = _state()
+    _require_authorized(s)
+    if refresh or not s.client.library:
+        try:
+            await s.client.update_library()
+        except YotoError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+    return [_serialize_card(c) for c in s.client.library.values()]
+
+
 @app.post("/players/{device_id}/refresh")
 async def refresh_status(device_id: str) -> dict:
     """Ask the device to push its current state via MQTT.

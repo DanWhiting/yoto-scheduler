@@ -1,31 +1,73 @@
 {% extends "base.html" %}
 {% block title %}Settings · Yoto Scheduler{% endblock %}
 {% block content %}
-  <h2>Settings</h2>
+  <hgroup>
+    <h2>Settings</h2>
+    <p>Manage the connection to your Yoto account.</p>
+  </hgroup>
 
-  <article>
-    <h3>Yoto account</h3>
+  <article class="settings-card">
+    <header class="settings-card-head">
+      <h3>Yoto Account</h3>
+      {% if authorized %}
+        <sl-badge variant="success" pill>Connected</sl-badge>
+      {% elif auth_flow %}
+        <sl-badge variant="warning" pill>Authorising…</sl-badge>
+      {% else %}
+        <sl-badge variant="neutral" pill>Not Connected</sl-badge>
+      {% endif %}
+    </header>
+
     {% if authorized %}
-      <p>Linked. {{ player_count }} player(s) loaded. MQTT
-        {% if mqtt_connected %}<strong>connected</strong>{% else %}<strong>disconnected</strong>{% endif %}.
-      </p>
-      <form method="post" action="/ui/auth/logout">
-        <button type="submit" class="secondary">Disconnect Yoto account</button>
-      </form>
+      <dl class="stat-list">
+        <div class="stat">
+          <dt>Players Loaded</dt>
+          <dd>{{ player_count }}</dd>
+        </div>
+        <div class="stat">
+          <dt>Live Event Stream (MQTT)</dt>
+          <dd>
+            {% if mqtt_connected %}
+              <sl-badge variant="success" pill>Connected</sl-badge>
+            {% else %}
+              <sl-badge variant="danger" pill>Disconnected</sl-badge>
+            {% endif %}
+          </dd>
+        </div>
+      </dl>
+      <footer class="settings-card-foot">
+        <form method="post" action="/ui/auth/logout">
+          <sl-button type="submit" variant="default">Disconnect Yoto Account</sl-button>
+        </form>
+      </footer>
+
     {% elif auth_flow %}
-      <p>Authorisation in progress. Open this URL on your phone:</p>
-      <p><a href="{{ auth_flow.verification_uri_complete }}" target="_blank" rel="noreferrer">
-        {{ auth_flow.verification_uri_complete }}
-      </a></p>
-      <p>User code: <code>{{ auth_flow.user_code }}</code></p>
-      <article id="auth-status" hx-get="/ui/partials/auth-status" hx-trigger="every 2s" hx-swap="innerHTML" hx-target="this">
-        Waiting for you to authorise…
-      </article>
+      <p class="settings-blurb">Open the authorisation page on a device, sign in, and approve the scheduler.</p>
+      <sl-button href="{{ auth_flow.verification_uri_complete }}"
+                 target="_blank" rel="noreferrer"
+                 variant="primary" size="large">
+        <sl-icon slot="prefix" name="box-arrow-up-right"></sl-icon>
+        Open Authorisation Page
+      </sl-button>
+      <p class="auth-alt">
+        Or visit <code>yotoplay.com/activate</code> on another device and enter code
+        <code class="auth-code">{{ auth_flow.user_code }}</code>.
+      </p>
+      <div id="auth-status" class="auth-status"
+           hx-get="/ui/partials/auth-status"
+           hx-trigger="every 2s"
+           hx-swap="innerHTML">
+        <sl-spinner></sl-spinner>
+        <span>Waiting for you to authorise…</span>
+      </div>
+
     {% else %}
-      <p>Not linked. Click below to start the device-code flow.</p>
-      <form method="post" action="/ui/auth/start">
-        <button type="submit">Connect Yoto account</button>
-      </form>
+      <p class="settings-blurb">Connect a Yoto account to load your players and start scheduling.</p>
+      <footer class="settings-card-foot">
+        <form method="post" action="/ui/auth/start">
+          <sl-button type="submit" variant="primary">Connect Yoto Account</sl-button>
+        </form>
+      </footer>
     {% endif %}
   </article>
 {% endblock %}

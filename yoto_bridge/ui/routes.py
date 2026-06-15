@@ -33,7 +33,7 @@ templates.env.filters["hms"] = _hms
 
 NAV_ITEMS = [
     ("Schedule",    "/ui/schedule",    False),
-    ("Library",     "/ui/library",     True),
+    ("Library",     "/ui/library",     False),
     ("Collections", "/ui/collections", True),
     ("Events",      "/ui/events",      True),
     ("Settings",    "/ui/settings",    False),
@@ -96,14 +96,11 @@ async def schedule_page(request: Request) -> Any:
 
 @router.get("/ui/library", response_class=HTMLResponse)
 async def library_page(request: Request) -> Any:
+    s = _state(request)
     return templates.TemplateResponse(
         request,
-        "pages/stub.html",
-        {
-            "nav": _nav("/ui/library"),
-            "title": "Library",
-            "blurb": "Browse the cards in your family's Yoto library. Used by Collections to group cards together.",
-        },
+        "pages/library.html",
+        {"nav": _nav("/ui/library"), "authorized": s.authorized},
     )
 
 
@@ -169,25 +166,39 @@ async def health_partial(request: Request) -> HTMLResponse:
 
 @router.get("/ui/partials/auth-status", response_class=HTMLResponse)
 async def auth_status_partial(request: Request) -> HTMLResponse:
+    """Returns inner HTML for the `.auth-status` pill on the settings page.
+
+    Shape: an inline-flex container expects an icon/spinner + a text element.
+    """
     s = _state(request)
     if s.authorized:
         return HTMLResponse(
-            '<p><strong>Linked.</strong> Reloading…</p>'
+            '<sl-icon name="check-circle-fill" style="color:var(--ys-success);"></sl-icon>'
+            '<span><strong>Linked.</strong> Reloading…</span>'
             '<script>setTimeout(()=>location.reload(),500)</script>'
         )
     if s.auth_flow is None:
-        return HTMLResponse('<p>No flow in progress.</p>')
+        return HTMLResponse(
+            '<sl-icon name="dash-circle" style="color:var(--ys-muted);"></sl-icon>'
+            '<span>No authorisation in progress.</span>'
+        )
     if s.auth_flow.state == "linked":
-        # Finalise: persist tokens, bring client online. Mirror the JSON endpoint.
         from ..app import _finalise_auth_flow
         await _finalise_auth_flow(s)
         return HTMLResponse(
-            '<p><strong>Linked.</strong> Reloading…</p>'
+            '<sl-icon name="check-circle-fill" style="color:var(--ys-success);"></sl-icon>'
+            '<span><strong>Linked.</strong> Reloading…</span>'
             '<script>setTimeout(()=>location.reload(),500)</script>'
         )
     if s.auth_flow.state == "error":
-        return HTMLResponse(f'<p>Error: {s.auth_flow.error}</p>')
-    return HTMLResponse('<p>Waiting for you to authorise on your phone…</p>')
+        return HTMLResponse(
+            '<sl-icon name="exclamation-circle-fill" style="color:var(--ys-error);"></sl-icon>'
+            f'<span>Error: {s.auth_flow.error}</span>'
+        )
+    return HTMLResponse(
+        '<sl-spinner></sl-spinner>'
+        '<span>Waiting for you to authorise…</span>'
+    )
 
 
 # --- auth form actions -----------------------------------------------------

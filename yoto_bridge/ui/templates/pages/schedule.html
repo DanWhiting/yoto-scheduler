@@ -10,42 +10,92 @@
     <article>You need to connect your Yoto account first. <a href="/ui/settings">Go to settings.</a></article>
   {% else %}
 
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js"></script>
+  <script defer src="{{ url_for('static', path='vendor/alpine.min.js') }}"></script>
 
+  {#
+    Alpine binds via standard `input` events. Shoelace fires its own `sl-input`
+    custom events on change, which don't satisfy x-model. We bridge with
+    explicit `@sl-input` listeners that mirror to our state, and trigger
+    autosave on both event types (Shoelace + native).
+  #}
   <div x-data="routinesEditor()" x-init="load()" x-cloak
-       @input.debounce.500ms="autosave()">
-    <div x-show="loading"><progress></progress> Loading…</div>
+       @input.debounce.500ms="autosave()"
+       @sl-input.debounce.500ms="autosave()">
+    <div x-show="loading"><sl-spinner></sl-spinner> Loading…</div>
+    <sl-alert x-show="!loading && loadError" variant="danger" open>
+      <strong>Couldn't load schedule:</strong> <span x-text="loadError"></span>
+    </sl-alert>
 
-    <div x-show="!loading">
+    <div x-show="!loading && !loadError">
       <div class="action-row">
-        <button type="button" @click="addRoutine()">+ Add routine</button>
-        <span class="save-state" :class="saveClass" x-text="saveLabel"></span>
+        <sl-button variant="primary" @click="addRoutine()">
+          <sl-icon slot="prefix" name="plus-lg"></sl-icon>
+          Add Routine
+        </sl-button>
+        <sl-badge x-show="saveState === 'saving'" variant="neutral" pill>Saving…</sl-badge>
+        <sl-badge x-show="saveState === 'saved'"  variant="success" pill>Saved</sl-badge>
+        <sl-badge x-show="saveState === 'error'"  variant="danger"  pill
+                  x-text="'Error: ' + saveError"></sl-badge>
       </div>
 
       <template x-for="r in sortedRoutines()" :key="r.id">
         <article class="routine-card">
+          <sl-dropdown class="routine-actions" placement="bottom-end" hoist>
+            <sl-icon-button slot="trigger"
+                            name="three-dots-vertical"
+                            label="Routine actions"></sl-icon-button>
+            <sl-menu>
+              <sl-menu-item @click="startEdit(r.id)">
+                <sl-icon slot="prefix" name="pencil-square"></sl-icon>
+                Rename
+              </sl-menu-item>
+              <sl-menu-item class="menu-item-destructive"
+                            @click="removeRoutine(r.id)">
+                <sl-icon slot="prefix" name="trash3"></sl-icon>
+                Delete
+              </sl-menu-item>
+            </sl-menu>
+          </sl-dropdown>
           <header class="routine-head">
-            <label class="routine-name">
-              <small>Name</small>
-              <input type="text" x-model="r.name" placeholder="e.g. bedtime" />
-            </label>
-            <label class="routine-cap volume-slider"
-                   :style="`--val: ${(Math.max(0, Math.min(16, r.volume_max || 0))/16*100)}%`">
-              <small>Volume limit</small>
-              <div class="slider-row">
-                <input type="range" min="0" max="16" step="1" x-model.number="r.volume_max" />
-                <span class="value" x-text="r.volume_max"></span>
+            <div class="field routine-name">
+              {# Display mode: plain name text. Rename via the ⋮ menu. #}
+              <div class="name-display" x-show="editingId !== r.id">
+                <span class="name-text"
+                      :class="{ 'name-text-empty': !r.name }"
+                      x-text="r.name || '(Name this routine)'"></span>
               </div>
-            </label>
-            <button type="button" @click="removeRoutine(r.id)" class="routine-delete" aria-label="Remove routine">✕</button>
+              {# Edit mode: input. Auto-focuses on entry. #}
+              <sl-input
+                  x-show="editingId === r.id"
+                  :id="'name-input-' + r.id"
+                  placeholder="e.g. bedtime"
+                  :value="r.name"
+                  @sl-input="r.name = $event.target.value"
+                  @sl-blur="finishEdit()"
+                  @keydown.enter.prevent="finishEdit()"
+                  @keydown.escape.prevent="finishEdit()">
+              </sl-input>
+            </div>
+            <div class="field routine-cap">
+              <sl-range
+                  label="Volume Limit"
+                  min="0" max="16" step="1"
+                  :value="r.volume_max"
+                  @sl-input="r.volume_max = parseInt($event.target.value, 10)">
+              </sl-range>
+            </div>
           </header>
 
           <div class="player-times">
             <template x-for="d in devices" :key="d.device_id">
-              <label>
-                <small x-text="d.name"></small>
-                <input type="time" x-model="r.times[d.device_id]" />
-              </label>
+              <div class="field">
+                <sl-input
+                    type="time"
+                    :label="d.name"
+                    :value="r.times[d.device_id]"
+                    @sl-input="r.times[d.device_id] = $event.target.value">
+                </sl-input>
+              </div>
             </template>
           </div>
         </article>
@@ -53,7 +103,7 @@
 
       <div x-show="!routines.length" class="empty-state">
         <p><strong>No routines yet.</strong></p>
-        <p>Add one to set a volume limit for part of the day — try a quiet <em>bedtime</em> or a louder <em>daytime</em>.</p>
+        <p>Add one to set a volume limit for part of the day — try a quiet <em>Bedtime</em> or a louder <em>Daytime</em>.</p>
       </div>
     </div>
   </div>
@@ -61,39 +111,57 @@
   <style>[x-cloak] { display: none !important; }</style>
 
   <script>
+  // crypto.randomUUID is only defined in a "secure context" (HTTPS or localhost).
+  // We're served plain HTTP over LAN, so on mobile Safari / strict browsers it
+  // throws. These IDs are only used to track routine objects across re-renders;
+  // they don't need to be cryptographic.
+  function uid() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      try { return crypto.randomUUID(); } catch (_) { /* fall through */ }
+    }
+    return 'r-' + Math.random().toString(36).slice(2) + '-' + Date.now().toString(36);
+  }
+
   function routinesEditor() {
     return {
       routines: [],
       devices: [],
       loading: true,
-
-      // Save state: 'idle' | 'saving' | 'saved' | 'error'
-      saveState: 'idle',
+      loadError: '',
+      editingId: null,
+      saveState: 'idle',       // 'idle' | 'saving' | 'saved' | 'error'
       saveError: '',
-      _saveSeq: 0,           // monotonic id for in-flight saves
-      _lastDoneSeq: 0,       // last seq we showed a state for
+      _saveSeq: 0,
+      _lastDoneSeq: 0,
 
-      get saveLabel() {
-        if (this.saveState === 'saving') return 'Saving…';
-        if (this.saveState === 'saved')  return 'Saved';
-        if (this.saveState === 'error')  return 'Error: ' + this.saveError;
-        return '';
+      startEdit(id) {
+        this.editingId = id;
+        // Focus the input on the next tick once x-show flips it visible.
+        setTimeout(() => {
+          const el = document.getElementById('name-input-' + id);
+          if (el && typeof el.focus === 'function') el.focus();
+        }, 0);
       },
-      get saveClass() { return this.saveState; },
+      finishEdit() { this.editingId = null; },
 
       async load() {
-        const data = await fetch('/schedule').then(r => r.json());
-        this.devices = data.known_devices || [];
-        this.routines = (data.config.routines || []).map(r => ({
-          id: crypto.randomUUID(),
-          name: r.name,
-          volume_max: r.volume_max,
-          times: Object.fromEntries(this.devices.map(d => {
-            const sched = (data.config.schedules || {})[d.device_id] || {};
-            return [d.device_id, sched[r.name] || ''];
-          })),
-        }));
-        this.loading = false;
+        try {
+          const data = await fetch('/schedule').then(r => r.json());
+          this.devices = data.known_devices || [];
+          this.routines = (data.config.routines || []).map(r => ({
+            id: uid(),
+            name: r.name,
+            volume_max: r.volume_max,
+            times: Object.fromEntries(this.devices.map(d => {
+              const sched = (data.config.schedules || {})[d.device_id] || {};
+              return [d.device_id, sched[r.name] || ''];
+            })),
+          }));
+        } catch (e) {
+          this.loadError = e && e.message ? e.message : String(e);
+        } finally {
+          this.loading = false;
+        }
       },
 
       sortedRoutines() {
@@ -105,14 +173,18 @@
       },
 
       addRoutine() {
+        const id = uid();
         this.routines.push({
-          id: crypto.randomUUID(),
+          id,
           name: '',
           volume_max: 10,
-          times: Object.fromEntries(this.devices.map(d => [d.device_id, ''])),
+          // Default every player's start time to noon so the user has something
+          // concrete to nudge from, rather than a blank-looking control with no
+          // visible cue that it needs setting.
+          times: Object.fromEntries(this.devices.map(d => [d.device_id, '12:00'])),
         });
-        // Don't save yet — empty-name routines are filtered out of the payload
-        // and would just confuse the user. Save fires once they type a name.
+        // New routines open in edit mode so the user can type a name immediately.
+        this.startEdit(id);
         this.saveState = 'idle';
       },
 
@@ -153,7 +225,6 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(this.buildPayload()),
           });
-          // Ignore stale responses if a newer save started after this one.
           if (seq < this._lastDoneSeq) return;
           this._lastDoneSeq = seq;
           if (!resp.ok) {
@@ -161,10 +232,9 @@
             throw new Error(body.detail || resp.statusText || 'save failed');
           }
           this.saveState = 'saved';
-          // Fade the 'Saved' message after a moment, only if nothing newer happened.
-          const stampSeq = seq;
+          const stamp = seq;
           setTimeout(() => {
-            if (this._lastDoneSeq === stampSeq && this.saveState === 'saved') {
+            if (this._lastDoneSeq === stamp && this.saveState === 'saved') {
               this.saveState = 'idle';
             }
           }, 1500);
