@@ -203,10 +203,13 @@ class EventsRunner:
         except Exception:
             log.exception("set_volume failed for event %s", event.id)
 
+        # Radios are just cards (e.g. b0Teo "Yoto Radio") — the action type
+        # is only kept around so the picker can filter the library.
         a = event.action
-        if a.type == "card":
+        if a.type in ("card", "radio"):
             if not a.card_id:
-                log.warning("Event %s has type=card but no card_id; skipping", event.id)
+                log.warning("Event %s has type=%s but no card_id; skipping",
+                            event.id, a.type)
                 return
             kwargs: dict[str, Any] = {}
             if a.chapter_key:
@@ -214,10 +217,7 @@ class EventsRunner:
             if a.track_key:
                 kwargs["track_key"] = a.track_key
             await self.client.play_card(event.player_id, a.card_id, **kwargs)
-        elif a.type == "radio":
-            # Not yet implemented — Yoto Radio / Daily / Sleep Radio URIs aren't
-            # exposed by the library; we'll need to discover them.
-            log.warning("Radio events not yet implemented (event %s)", event.id)
         elif a.type == "alarm_tone":
-            # Not yet implemented — Yoto's alarm sound_id list isn't documented.
+            # Not yet implemented — Yoto's alarm tone IDs aren't documented and
+            # don't appear in /card/family/library. Discovery work pending.
             log.warning("Alarm tone events not yet implemented (event %s)", event.id)

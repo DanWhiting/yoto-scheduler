@@ -102,30 +102,37 @@
                  this is functionally correct until radio/alarm_tone come online. #}
               <sl-select value="card" @sl-change="setActionType(event, $event.target.value)">
                 <sl-option value="card">Play a card</sl-option>
-                <sl-option value="radio" disabled>Play radio (coming soon)</sl-option>
+                <sl-option value="radio">Play radio</sl-option>
                 <sl-option value="alarm_tone" disabled>Play alarm tone (coming soon)</sl-option>
               </sl-select>
             </label>
 
-            {# Card picker: button that opens the modal. Shows the currently
-               selected card's cover + title. #}
-            <div class="card-pick-wrap" x-show="event.action.type === 'card'">
-              <small class="caption">Card</small>
+            {# Card/radio picker — same modal, filtered by event.action.type. #}
+            <div class="card-pick-wrap"
+                 x-show="event.action.type === 'card' || event.action.type === 'radio'">
+              <small class="caption" x-text="event.action.type === 'radio' ? 'Radio Station' : 'Card'"></small>
               <button type="button"
                       class="card-pick-trigger"
                       @click="openCardPicker(event)">
-                <template x-if="cardById(event.action.card_id)">
+                <template x-if="selectedCard(event)">
                   <span class="card-pick-current">
-                    <img :src="cardById(event.action.card_id).cover_image_large || ''"
-                         :alt="cardById(event.action.card_id).title || ''"
-                         referrerpolicy="no-referrer" />
-                    <span class="card-pick-title" x-text="cardById(event.action.card_id).title || '(untitled)'"></span>
+                    <template x-if="selectedCard(event).cover_image_large">
+                      <img :src="selectedCard(event).cover_image_large"
+                           :alt="selectedCard(event).title || ''"
+                           referrerpolicy="no-referrer"
+                           onerror="this.style.visibility='hidden'" />
+                    </template>
+                    <template x-if="!selectedCard(event).cover_image_large">
+                      <sl-icon class="card-pick-fallback"
+                               :name="selectedCard(event).category === 'radio' ? 'broadcast' : 'music-note-list'"></sl-icon>
+                    </template>
+                    <span class="card-pick-title" x-text="selectedCard(event).title || '(untitled)'"></span>
                   </span>
                 </template>
-                <template x-if="!cardById(event.action.card_id)">
+                <template x-if="!selectedCard(event)">
                   <span class="card-pick-placeholder">
-                    <sl-icon name="music-note-list"></sl-icon>
-                    Pick a card…
+                    <sl-icon :name="event.action.type === 'radio' ? 'broadcast' : 'music-note-list'"></sl-icon>
+                    <span x-text="event.action.type === 'radio' ? 'Pick a radio station…' : 'Pick a card…'"></span>
                   </span>
                 </template>
                 <sl-icon name="chevron-right" class="card-pick-chevron"></sl-icon>
@@ -173,8 +180,9 @@
       </div>
     </div>
 
-    {# Card-picker modal — shared across all event cards. #}
-    <sl-dialog label="Pick a Card"
+    {# Card / radio picker modal — shared across all event cards. The same
+       widget filters its contents based on which event's action triggered it. #}
+    <sl-dialog :label="pickerFilter === 'radio' ? 'Pick a Radio Station' : 'Pick a Card'"
                class="card-picker-dialog"
                :open="pickerOpen"
                @sl-after-hide="pickerOpen = false">
@@ -189,20 +197,30 @@
       </div>
       <div class="card-picker-grid">
         <template x-for="card in filteredPickerCards()" :key="card.id">
+          {# <button> can only contain phrasing content — <p> and <div> inside
+             it are invalid HTML and browsers auto-correct by hoisting them
+             out of the button on parse. Using <span> + display:block in CSS
+             keeps the nesting valid and the labels visible. #}
           <button type="button"
                   class="library-card picker-card-button"
                   @click="pickCard(card)">
-            <div class="library-card-art">
-              <img :src="card.cover_image_large || ''"
-                   :alt="card.title || ''"
-                   loading="lazy"
-                   referrerpolicy="no-referrer"
-                   onerror="this.style.visibility='hidden'" />
-            </div>
-            <div class="library-card-text">
-              <p class="library-card-title" x-text="card.title || '(untitled)'"></p>
-              <p class="library-card-author" x-text="card.author || ''"></p>
-            </div>
+            <span class="library-card-art">
+              <template x-if="card.cover_image_large">
+                <img :src="card.cover_image_large"
+                     :alt="card.title || ''"
+                     loading="lazy"
+                     referrerpolicy="no-referrer"
+                     onerror="this.style.visibility='hidden'" />
+              </template>
+              <template x-if="!card.cover_image_large">
+                <sl-icon class="library-card-fallback"
+                         :name="card.category === 'radio' ? 'broadcast' : 'music-note-list'"></sl-icon>
+              </template>
+            </span>
+            <span class="library-card-text">
+              <span class="library-card-title" x-text="card.title || '(untitled)'"></span>
+              <span class="library-card-author" x-text="card.author || ''"></span>
+            </span>
           </button>
         </template>
       </div>
@@ -220,6 +238,15 @@
     return 'e-' + Math.random().toString(36).slice(2) + '-' + Date.now().toString(36);
   }
 
+  // Heuristic: Yoto's radio cards have "Radio" in the title (Yoto Radio,
+  // Yoto Sleep Radio, Yoto Classical Radio…) or are exactly "Yoto Daily".
+  // We don't have a server-side category to rely on — every card returns
+  // `category: null` — so the title pattern is the cleanest available filter.
+  const RADIO_TITLE_PATTERN = /(\bradio\b|^yoto daily$)/i;
+  function isRadioCard(card) {
+    return !!(card && RADIO_TITLE_PATTERN.test(card.title || ''));
+  }
+
   function eventsEditor() {
     return {
       devices: [],
@@ -234,6 +261,7 @@
       pickerOpen: false,
       pickerQuery: '',
       pickerEventId: null,
+      pickerFilter: 'card',  // 'card' | 'radio'
 
       // Page state
       loading: true,
@@ -286,9 +314,15 @@
 
       cardById(id) { return id ? this.cardIndex[id] || null : null; },
 
+      selectedCard(event) {
+        if (!event || !event.action || !event.action.card_id) return null;
+        return this.cardIndex[event.action.card_id] || null;
+      },
+
       addEvent() {
         if (!this.selectedPlayerId) return;
-        const firstCardId = (this.cards[0] && this.cards[0].id) || null;
+        const firstCard = this.cards.find(c => !isRadioCard(c));
+        const firstCardId = (firstCard && firstCard.id) || null;
         this.events.push({
           id: uid(),
           player_id: this.selectedPlayerId,
@@ -317,6 +351,11 @@
 
       setActionType(event, type) {
         event.action.type = type;
+        // Switching types invalidates the previously-chosen target — clear
+        // play args so the user picks fresh from the correctly-filtered modal.
+        event.action.card_id = null;
+        event.action.chapter_key = null;
+        event.action.track_key = null;
         this.autosave();
       },
 
@@ -329,22 +368,30 @@
 
       isIncomplete(event) {
         if (!event.action) return true;
-        if (event.action.type === 'card') return !event.action.card_id;
-        return true;  // alarm_tone / radio not implemented yet
+        if (event.action.type === 'card')  return !event.action.card_id;
+        if (event.action.type === 'radio') return !event.action.card_id;
+        return true;  // alarm_tone not implemented yet
       },
 
       // ----- card picker modal -----
 
       openCardPicker(event) {
         this.pickerEventId = event.id;
+        this.pickerFilter = event.action.type === 'radio' ? 'radio' : 'card';
         this.pickerQuery = '';
         this.pickerOpen = true;
       },
 
       filteredPickerCards() {
         const q = (this.pickerQuery || '').trim().toLowerCase();
-        if (!q) return this.cards;
-        return this.cards.filter(c =>
+        let pool = this.cards;
+        if (this.pickerFilter === 'radio') {
+          pool = pool.filter(c => isRadioCard(c));
+        } else {
+          pool = pool.filter(c => !isRadioCard(c));
+        }
+        if (!q) return pool;
+        return pool.filter(c =>
           (c.title || '').toLowerCase().includes(q) ||
           (c.author || '').toLowerCase().includes(q) ||
           (c.series_title || '').toLowerCase().includes(q)
@@ -354,10 +401,13 @@
       pickCard(card) {
         const event = this.events.find(e => e.id === this.pickerEventId);
         if (event) {
+          // Radios are just cards — type only differs so the picker stays
+          // filtered and the track sub-picker stays hidden.
+          event.action.type = isRadioCard(card) ? 'radio' : 'card';
           event.action.card_id = card.id;
           event.action.chapter_key = null;
           event.action.track_key = null;
-          this.loadTracks(card.id);
+          if (!isRadioCard(card)) this.loadTracks(card.id);
           this.autosave();
         }
         this.pickerOpen = false;

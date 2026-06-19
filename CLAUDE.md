@@ -63,6 +63,7 @@ docs/STYLE.md       UI design language (tokens, components, copy)
 
 - **Pico styles `[type=submit|button|reset]`** as native buttons. Those attribute selectors also match Shoelace `<sl-button>` hosts because Shoelace forwards `type` to the host for form integration. Result: stray Pico-primary-blue background painted *around* every Shoelace button. The `sl-button { background: transparent !important; … }` reset at the top of `app.css` neutralises it. If you see Pico-coloured rectangles surrounding a Shoelace control, this is the cause.
 - **`<sl-select>` defaults**: prefer a literal HTML `value="…"` attribute over Alpine's reactive `:value=` for initial selection. Shoelace reads value during component upgrade; Alpine binding can land before the `<sl-option>` children are slotted, leaving the select empty.
+- **`<p>` and `<div>` inside `<button>`** is invalid HTML — `<button>` only allows phrasing content. Browsers auto-correct during parse by closing the button early and hoisting the block elements out, which renders the inner text *outside* the visible button. Symptom: card images appear but their titles don't. Fix: use `<span>` children with `display: block` in CSS (the picker grid in `events.html` does this).
 
 ## Configuration (env vars)
 

@@ -330,6 +330,28 @@ async def list_library(refresh: bool = False) -> list[dict]:
     return [_serialize_card(c) for c in s.client.library.values()]
 
 
+@app.get("/players/{device_id}/config")
+async def get_player_config(device_id: str) -> dict:
+    """Dump the full PlayerConfig for inspection. Useful for discovering
+    Yoto Daily / Yoto Radio / Sleep Radio URIs and existing alarm sound_ids.
+    """
+    from dataclasses import asdict
+    s = _state()
+    _require_authorized(s)
+    if device_id not in s.client.players:
+        raise HTTPException(status_code=404, detail=f"Unknown device {device_id}")
+    player = s.client.players[device_id]
+    config = getattr(getattr(player, "info", None), "config", None)
+    if config is None:
+        return {"device_id": device_id, "name": player.name, "config": None,
+                "note": "player.info.config not populated yet"}
+    try:
+        cfg_dict = asdict(config)
+    except TypeError:
+        cfg_dict = {"raw": repr(config)}
+    return {"device_id": device_id, "name": player.name, "config": cfg_dict}
+
+
 @app.get("/library/{card_id}/tracks")
 async def get_card_tracks(card_id: str) -> dict:
     """Return the chapters + tracks of a card, fetching detail if needed."""
