@@ -358,27 +358,36 @@ def _serialize_card(card: Any) -> dict:
     }
 
 
-# Card IDs discovered to be alarm tones (each player's `alarms[].sound_id`).
-# These cards are not in /card/family/library but are fetchable by ID via
-# update_card_detail. We collect them on startup and tag them so the picker
-# can filter them out of the regular card view.
+# Alarm-tone cards aren't returned by /card/family/library but are fetchable
+# by ID via update_card_detail. We seed with the IDs we've previously verified
+# exist for all Yoto family accounts (Yoto has no endpoint to enumerate them
+# — see scripts/probe_tones.py for the dead-end probes), then also pick up
+# any others currently assigned to a player's alarms. Both populate
+# _known_tone_ids so /library can tag them with category='tone'.
+SEED_TONE_IDS: tuple[str, ...] = (
+    "4OD25",  # Wake with Jake
+    "2QnKe",  # Time for School
+    "j07m0",  # Time for Bed
+    "5IUN7",  # Surf's Up
+    "5WsQg",  # Fanfare
+    "hCIKn",  # Harp Rise
+)
 _known_tone_ids: set[str] = set()
 
 
 async def _discover_alarm_tones(client: Any) -> None:
-    """Read alarm sound_ids from every player and fetch their card details.
-
-    Adds the cards to client.library and records the ids in _known_tone_ids so
-    /library can tag them with category='tone'.
+    """Populate _known_tone_ids with the seed list plus any alarm sound_ids
+    currently configured on a player. Cards are fetched via update_card_detail
+    and added to client.library so /library can tag them with category='tone'.
     """
-    seen: set[str] = set()
+    seen: set[str] = set(SEED_TONE_IDS)
     for player in client.players.values():
         config = getattr(getattr(player, "info", None), "config", None)
         if config is None:
             continue
         for alarm in (getattr(config, "alarms", None) or []):
             sid = getattr(alarm, "sound_id", None)
-            if sid and sid not in seen:
+            if sid:
                 seen.add(sid)
     for sid in seen:
         if sid in client.library:
