@@ -62,7 +62,8 @@ docs/STYLE.md       UI design language (tokens, components, copy)
 ## Yoto API gotchas (already worked around)
 
 - **Refresh tokens rotate** on every refresh. Always persist after `check_and_refresh_token()` — `_persist_rotated_refresh_token()` does this.
-- **`device_code_flow_start` only requests `offline_access`.** Library bug. We run our own device-code POST in `auth.py` with the full scope list and hand the refresh token to `YotoClient` via `set_refresh_token`.
+- **Device-code grant is deprecated by Yoto for new OAuth clients** (since 2024). Legacy clients still work; freshly-registered Public Clients get `403 unauthorized_client` on the device-code endpoint. We use **PKCE Authorization Code** flow instead — see `auth.py` (PKCE verifier + challenge, browser redirect to `/authorize`, `/auth/callback` exchange). yoto.dev's [headless-cli-auth](https://yoto.dev/authentication/headless-cli-auth/) page is the canonical recipe.
+- **`device_code_flow_start` only requests `offline_access`.** Library bug — irrelevant now since we don't use device-code, but yoto_api's PKCE-equivalent has the same shape of bug, hence our own auth.py.
 - **`PlayerStatus.is_online` moved to `YotoPlayer.is_online`** in yoto-api 4.x. Don't access it on the status object.
 - **Rich device fields** (network, wifi, power source, temperature) are on `PlayerExtendedStatus`, not `PlayerStatus`.
 - **`crypto.randomUUID()` requires HTTPS or localhost.** Over LAN HTTP it's undefined on mobile Safari. UI uses a local `uid()` helper (Math.random + Date.now).
@@ -80,7 +81,8 @@ docs/STYLE.md       UI design language (tokens, components, copy)
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `YOTO_CLIENT_ID` | dev app id | Yoto OAuth client ID |
+| `YOTO_CLIENT_ID` | _(required)_ | Yoto OAuth client ID. Register a Public Client at Yoto's developer console; never commit. |
+| `YOTO_REDIRECT_URI` | _(required)_ | Full URL Yoto redirects to after auth. Must match an Allowed Callback URL on the OAuth client (e.g. `http://192.168.1.94:8765/auth/callback`). |
 | `YOTO_BRIDGE_HOST` | `127.0.0.1` | Bind host. Use `0.0.0.0` for LAN access. |
 | `YOTO_BRIDGE_PORT` | `8765` | Bind port |
 | `YOTO_BRIDGE_DRY_RUN` | unset | `1` to log-and-skip mutating calls |

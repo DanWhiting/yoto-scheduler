@@ -21,10 +21,15 @@ services:
       # the host directory accordingly if you hit permission errors on first run.
       - ./user_data:/data
     environment:
+      # REQUIRED: your Yoto OAuth client id (no default). Register a Public
+      # Client at Yoto's developer console. Do not commit a real value — use
+      # a `.env` file (gitignored) or the host environment to inject it.
+      YOTO_CLIENT_ID: "${YOTO_CLIENT_ID:?set YOTO_CLIENT_ID in .env or your shell}"
+      # REQUIRED: the URL Yoto redirects to after auth. Must exactly match an
+      # Allowed Callback URL on the OAuth client. For Pi: http://<pi-ip>:8765/auth/callback.
+      YOTO_REDIRECT_URI: "${YOTO_REDIRECT_URI:?set YOTO_REDIRECT_URI in .env (Yoto Allowed Callback URL)}"
       # Set to "1" to log-and-skip every mutating Yoto API call (recommended
       # for the first dry-run on the Pi before swapping in real volume caps).
       YOTO_BRIDGE_DRY_RUN: ""
-      # Override if you've registered your own Yoto OAuth client.
-      # YOTO_CLIENT_ID: ""
     # The bridge reaches Yoto over the public internet (HTTPS + MQTT TLS);
     # default bridge networking is sufficient — no host-mode required.

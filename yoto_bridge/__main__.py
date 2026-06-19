@@ -25,6 +25,12 @@ def main() -> None:
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
+    if not config.CLIENT_ID:
+        logging.getLogger(__name__).warning(
+            "YOTO_CLIENT_ID is not set; the device-code auth flow will fail "
+            "until it's configured (env var or docker-compose.yml).",
+        )
+
     server = uvicorn.Server(
         uvicorn.Config(
             "yoto_bridge.app:app",

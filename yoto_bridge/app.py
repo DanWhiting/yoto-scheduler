@@ -13,7 +13,8 @@ from typing import Any
 
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from yoto_api import YotoClient, YotoError
@@ -211,29 +212,25 @@ async def healthz() -> dict:
 # --- auth -------------------------------------------------------------------
 
 
+def _ensure_pkce_configured() -> None:
+    if not config.CLIENT_ID:
+        raise HTTPException(500, "YOTO_CLIENT_ID is not set")
+    if not config.REDIRECT_URI:
+        raise HTTPException(500, "YOTO_REDIRECT_URI is not set (must match an Allowed Callback URL at Yoto)")
+
+
 @app.post("/auth/start")
 async def auth_start() -> dict:
+    """Begin a PKCE flow. Returns the authorize URL — the caller redirects the
+    user's browser there. UI form-post variant lives in ui/routes.py.
+    """
     s = _state()
     if s.authorized:
         return {"state": "linked", "message": "Already linked."}
-    if s.auth_flow is not None and s.auth_flow.state == "pending":
-        return {
-            "state": "pending",
-            "verification_uri_complete": s.auth_flow.verification_uri,
-            "user_code": s.auth_flow.user_code,
-            "expires_in": s.auth_flow.expires_in,
-        }
-    try:
-        flow = await auth.start_flow()
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"Failed to start device-code flow: {e}")
-    s.auth_flow = flow
-    return {
-        "state": "pending",
-        "verification_uri_complete": flow.verification_uri,
-        "user_code": flow.user_code,
-        "expires_in": flow.expires_in,
-    }
+    _ensure_pkce_configured()
+    if s.auth_flow is None or s.auth_flow.state != "pending":
+        s.auth_flow = auth.start_flow()
+    return {"state": "pending", "authorize_url": s.auth_flow.authorize_url()}
 
 
 @app.get("/auth/status")
@@ -243,22 +240,45 @@ async def auth_status() -> dict:
         return {"state": "linked"}
     if s.auth_flow is None:
         return {"state": "idle"}
-
-    if s.auth_flow.state == "linked":
-        try:
-            await _finalise_auth_flow(s)
-        except Exception as e:  # noqa: BLE001
-            raise HTTPException(status_code=502, detail=str(e))
-        return {"state": "linked"}
-
     if s.auth_flow.state == "error":
         return {"state": "error", "message": s.auth_flow.error}
+    return {"state": s.auth_flow.state}
 
-    return {
-        "state": "pending",
-        "verification_uri_complete": s.auth_flow.verification_uri,
-        "user_code": s.auth_flow.user_code,
-    }
+
+@app.get("/auth/callback")
+async def auth_callback(
+    code: str | None = Query(None),
+    state: str | None = Query(None),
+    error: str | None = Query(None),
+    error_description: str | None = Query(None),
+) -> RedirectResponse:
+    """Yoto redirects the browser here after the user approves. We exchange the
+    code for tokens, persist them, bring the client online, then bounce back
+    to the settings page so the UI reflects the new state.
+    """
+    s = _state()
+    if error:
+        msg = f"{error}: {error_description or ''}".strip(": ")
+        if s.auth_flow is not None:
+            s.auth_flow.error = msg
+        log.warning("Yoto returned auth error: %s", msg)
+        return RedirectResponse("/ui/settings", status_code=303)
+    if not code or not state:
+        raise HTTPException(400, "callback missing required ?code= or ?state=")
+    if s.auth_flow is None or s.auth_flow.state != "pending":
+        raise HTTPException(400, "no pending auth flow — start one from /ui/settings")
+    if state != s.auth_flow.oauth_state:
+        raise HTTPException(400, "state mismatch — possible CSRF; re-start the auth flow")
+    try:
+        await s.auth_flow.exchange_code(code)
+        await _finalise_auth_flow(s)
+    except Exception as e:  # noqa: BLE001
+        log.exception("PKCE token exchange failed")
+        # auth_flow.error already populated by exchange_code on token errors;
+        # surface any other failure to the UI via a side channel state error.
+        if s.auth_flow is not None and not s.auth_flow.error:
+            s.auth_flow.error = str(e)
+    return RedirectResponse("/ui/settings", status_code=303)
 
 
 @app.post("/auth/logout")

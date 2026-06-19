@@ -11,3 +11,8 @@ wheels/
 
 # Local runtime state (per-deployment) — refresh tokens, schedule, events
 user_data/
+
+# Secrets (e.g. YOTO_CLIENT_ID picked up by docker-compose)
+.env
+.env.*
+!.env.example

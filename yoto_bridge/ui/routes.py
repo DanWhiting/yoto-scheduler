@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from .. import auth, storage
+from .. import auth, config, storage
 
 _THIS_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(_THIS_DIR / "templates"))
@@ -127,12 +127,9 @@ async def events_page(request: Request) -> Any:
 @router.get("/ui/settings", response_class=HTMLResponse)
 async def settings_page(request: Request) -> Any:
     s = _state(request)
-    flow_view = None
-    if s.auth_flow is not None and s.auth_flow.state == "pending":
-        flow_view = {
-            "verification_uri_complete": s.auth_flow.verification_uri,
-            "user_code": s.auth_flow.user_code,
-        }
+    auth_error = None
+    if not s.authorized and s.auth_flow is not None and s.auth_flow.state == "error":
+        auth_error = s.auth_flow.error
     return templates.TemplateResponse(
         request,
         "pages/settings.html",
@@ -141,7 +138,9 @@ async def settings_page(request: Request) -> Any:
             "authorized": s.authorized,
             "player_count": len(s.client.players) if s.authorized else 0,
             "mqtt_connected": s.client.is_mqtt_connected if s.authorized else False,
-            "auth_flow": flow_view,
+            "auth_error": auth_error,
+            "redirect_uri_configured": bool(config.REDIRECT_URI),
+            "client_id_configured": bool(config.CLIENT_ID),
         },
     )
 
@@ -165,55 +164,23 @@ async def health_partial(request: Request) -> HTMLResponse:
     return HTMLResponse(f'{dry_badge}<span class="dot dot-off"></span> not linked')
 
 
-@router.get("/ui/partials/auth-status", response_class=HTMLResponse)
-async def auth_status_partial(request: Request) -> HTMLResponse:
-    """Returns inner HTML for the `.auth-status` pill on the settings page.
-
-    Shape: an inline-flex container expects an icon/spinner + a text element.
-    """
-    s = _state(request)
-    if s.authorized:
-        return HTMLResponse(
-            '<sl-icon name="check-circle-fill" style="color:var(--ys-success);"></sl-icon>'
-            '<span><strong>Linked.</strong> Reloading…</span>'
-            '<script>setTimeout(()=>location.reload(),500)</script>'
-        )
-    if s.auth_flow is None:
-        return HTMLResponse(
-            '<sl-icon name="dash-circle" style="color:var(--ys-muted);"></sl-icon>'
-            '<span>No authorisation in progress.</span>'
-        )
-    if s.auth_flow.state == "linked":
-        from ..app import _finalise_auth_flow
-        await _finalise_auth_flow(s)
-        return HTMLResponse(
-            '<sl-icon name="check-circle-fill" style="color:var(--ys-success);"></sl-icon>'
-            '<span><strong>Linked.</strong> Reloading…</span>'
-            '<script>setTimeout(()=>location.reload(),500)</script>'
-        )
-    if s.auth_flow.state == "error":
-        return HTMLResponse(
-            '<sl-icon name="exclamation-circle-fill" style="color:var(--ys-error);"></sl-icon>'
-            f'<span>Error: {s.auth_flow.error}</span>'
-        )
-    return HTMLResponse(
-        '<sl-spinner></sl-spinner>'
-        '<span>Waiting for you to authorise…</span>'
-    )
-
-
 # --- auth form actions -----------------------------------------------------
 
 
 @router.post("/ui/auth/start")
 async def ui_auth_start(request: Request) -> RedirectResponse:
+    """Form-post target for the Connect button. Mints a fresh PKCE flow and
+    303-redirects the user's browser to Yoto's /authorize endpoint."""
     s = _state(request)
-    if not s.authorized and (s.auth_flow is None or s.auth_flow.state != "pending"):
-        try:
-            s.auth_flow = await auth.start_flow()
-        except Exception as e:  # noqa: BLE001
-            raise HTTPException(502, str(e))
-    return RedirectResponse("/ui/settings", status_code=303)
+    if s.authorized:
+        return RedirectResponse("/ui/settings", status_code=303)
+    if not config.CLIENT_ID:
+        raise HTTPException(500, "YOTO_CLIENT_ID is not set")
+    if not config.REDIRECT_URI:
+        raise HTTPException(500, "YOTO_REDIRECT_URI is not set")
+    # Always start fresh — a stale flow's verifier/state is one-shot.
+    s.auth_flow = auth.start_flow()
+    return RedirectResponse(s.auth_flow.authorize_url(), status_code=303)
 
 
 @router.post("/ui/auth/logout")

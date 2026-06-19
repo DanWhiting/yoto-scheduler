@@ -13,8 +13,6 @@
         <span class="status-icon status-icon-ok" title="Connected" aria-label="Connected">
           <sl-icon name="check-lg"></sl-icon>
         </span>
-      {% elif auth_flow %}
-        <sl-badge variant="warning" pill>Authorising…</sl-badge>
       {% else %}
         <span class="status-icon status-icon-error" title="Not connected" aria-label="Not connected">
           <sl-icon name="x-lg"></sl-icon>
@@ -66,31 +64,37 @@
         </form>
       </sl-dialog>
 
-    {% elif auth_flow %}
-      <p class="settings-blurb">Open the authorisation page on a device, sign in, and approve the scheduler.</p>
-      <sl-button href="{{ auth_flow.verification_uri_complete }}"
-                 target="_blank" rel="noreferrer"
-                 variant="primary" size="large">
-        <sl-icon slot="prefix" name="box-arrow-up-right"></sl-icon>
-        Open Authorisation Page
-      </sl-button>
-      <p class="auth-alt">
-        Or visit <code>yotoplay.com/activate</code> on another device and enter code
-        <code class="auth-code">{{ auth_flow.user_code }}</code>.
-      </p>
-      <div id="auth-status" class="auth-status"
-           hx-get="/ui/partials/auth-status"
-           hx-trigger="every 2s"
-           hx-swap="innerHTML">
-        <sl-spinner></sl-spinner>
-        <span>Waiting for you to authorise…</span>
-      </div>
-
     {% else %}
-      <p class="settings-blurb">Connect a Yoto account to load your players and start scheduling.</p>
+      {% if not client_id_configured or not redirect_uri_configured %}
+        <sl-alert variant="warning" open>
+          <sl-icon slot="icon" name="exclamation-triangle"></sl-icon>
+          <strong>Configuration incomplete.</strong>
+          <ul class="settings-blurb">
+            {% if not client_id_configured %}
+              <li><code>YOTO_CLIENT_ID</code> is not set. Register a Public Client at Yoto's developer console and set the env var.</li>
+            {% endif %}
+            {% if not redirect_uri_configured %}
+              <li><code>YOTO_REDIRECT_URI</code> is not set. Must match an Allowed Callback URL on your Yoto OAuth client (e.g. <code>http://192.168.1.94:8765/auth/callback</code>).</li>
+            {% endif %}
+          </ul>
+        </sl-alert>
+      {% endif %}
+      {% if auth_error %}
+        <sl-alert variant="danger" open closable>
+          <sl-icon slot="icon" name="exclamation-octagon"></sl-icon>
+          <strong>Authorisation failed.</strong>
+          <p class="settings-blurb">{{ auth_error }}</p>
+        </sl-alert>
+      {% endif %}
+      <p class="settings-blurb">Connect your Yoto account to load your players and start scheduling. You'll be redirected to Yoto's sign-in page, then back here once you approve.</p>
       <footer class="settings-card-foot">
         <form method="post" action="/ui/auth/start">
-          <sl-button type="submit" variant="primary">Connect Yoto Account</sl-button>
+          <sl-button type="submit"
+                     variant="primary"
+                     {% if not client_id_configured or not redirect_uri_configured %}disabled{% endif %}>
+            <sl-icon slot="prefix" name="box-arrow-up-right"></sl-icon>
+            Connect Yoto Account
+          </sl-button>
         </form>
       </footer>
     {% endif %}
