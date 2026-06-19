@@ -97,8 +97,10 @@
           <div class="event-row event-row-action">
             <label>
               <small>Action</small>
-              <sl-select :value="event.action.type || 'card'"
-                         @sl-change="setActionType(event, $event.target.value)">
+              {# Static `value="card"` is set at HTML parse time so sl-select picks
+                 it up during component upgrade. Card is the only enabled action so
+                 this is functionally correct until radio/alarm_tone come online. #}
+              <sl-select value="card" @sl-change="setActionType(event, $event.target.value)">
                 <sl-option value="card">Play a card</sl-option>
                 <sl-option value="radio" disabled>Play radio (coming soon)</sl-option>
                 <sl-option value="alarm_tone" disabled>Play alarm tone (coming soon)</sl-option>
@@ -135,7 +137,7 @@
           <div class="event-row" x-show="event.action.type === 'card' && event.action.card_id">
             <label>
               <small>Track (optional — leave on "From start" to play the whole card)</small>
-              <sl-select :value="event.action.track_key || ''"
+              <sl-select x-init="$nextTick(() => { $el.value = (event.action.chapter_key && event.action.track_key) ? `${event.action.chapter_key}:${event.action.track_key}` : '' })"
                          @sl-change="setTrack(event, $event.target.value, $event.target)">
                 <sl-option value="">From start (whole card)</sl-option>
                 <template x-for="t in tracksForCard(event.action.card_id)" :key="t.chapter_key + ':' + t.key">
