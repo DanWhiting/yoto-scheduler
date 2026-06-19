@@ -76,14 +76,16 @@
                   @keydown.escape.prevent="finishEdit()">
               </sl-input>
             </div>
-            <div class="field routine-cap">
-              <sl-range
-                  label="Volume Limit"
-                  min="0" max="16" step="1"
-                  :value="r.volume_max"
-                  @sl-input="r.volume_max = parseInt($event.target.value, 10)">
-              </sl-range>
-            </div>
+            <label class="field routine-cap volume-slider"
+                   :style="`--val: ${(Math.max(0, Math.min(16, r.volume_max || 0))/16*100)}%`">
+              <small>Volume Limit</small>
+              <div class="slider-row">
+                <sl-range min="0" max="16" step="1"
+                          :value="r.volume_max"
+                          @sl-input="r.volume_max = parseInt($event.target.value, 10)"></sl-range>
+                <span class="value" x-text="r.volume_max"></span>
+              </div>
+            </label>
           </header>
 
           <div class="player-times">

@@ -608,13 +608,13 @@ sl-menu-item.menu-item-destructive sl-icon { color: var(--ys-error); }
   align-items: end;
 }
 
-.event-volume .slider-row {
+.volume-slider .slider-row {
   display: flex;
   align-items: center;
   gap: 0.7rem;
 }
-.event-volume .slider-row sl-range { flex: 1; }
-.event-volume .slider-row .value {
+.volume-slider .slider-row sl-range { flex: 1; }
+.volume-slider .slider-row .value {
   font-weight: 700;
   font-size: 0.95rem;
   color: var(--ys-text);
