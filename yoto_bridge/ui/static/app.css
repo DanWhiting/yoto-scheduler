@@ -840,6 +840,16 @@ hgroup p {
   font-size: 0.75rem;
   color: var(--ys-muted);
 }
+.dry-run-badge {
+  display: inline-block;
+  background: var(--ys-error);
+  color: #fff;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: var(--ys-radius-xs);
+  letter-spacing: 0.06em;
+}
 .dot {
   display: inline-block;
   width: 0.55rem; height: 0.55rem;

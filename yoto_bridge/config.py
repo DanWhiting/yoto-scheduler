@@ -5,16 +5,23 @@ from pathlib import Path
 
 CLIENT_ID = os.environ.get("YOTO_CLIENT_ID", "HsUxcNdA8VF7EqNeq2ZvH1t3GQAuO7IQ")
 
+# Dev / dry-run mode. When on, any mutating client call (set_volume, play_card,
+# set_player_config, etc.) becomes a logging no-op — read paths still work, so
+# the UI behaves normally but no Yoto state is changed.
+DRY_RUN = os.environ.get("YOTO_BRIDGE_DRY_RUN", "").lower() in ("1", "true", "yes", "on")
+
 HOST = os.environ.get("YOTO_BRIDGE_HOST", "127.0.0.1")
 PORT = int(os.environ.get("YOTO_BRIDGE_PORT", "8765"))
 LOG_LEVEL = os.environ.get("YOTO_BRIDGE_LOG_LEVEL", "info")
 
-# Default to the project-root token file so the existing smoke-test token is
-# reused. Override with YOTO_TOKEN_FILE in production (e.g. ~/.yoto/tokens.json).
+# Per-deployment runtime state lives under ./user_data/ to keep the project
+# root clean. The dir is created on first write by storage / scheduler / events.
+# Override individual files with env vars or move the whole dir with YOTO_USER_DATA_DIR.
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-TOKEN_FILE = Path(os.environ.get("YOTO_TOKEN_FILE", str(_PROJECT_ROOT / "yoto_tokens.json")))
-SCHEDULE_FILE = Path(os.environ.get("YOTO_SCHEDULE_FILE", str(_PROJECT_ROOT / "schedule.json")))
-EVENTS_FILE   = Path(os.environ.get("YOTO_EVENTS_FILE",   str(_PROJECT_ROOT / "events.json")))
+USER_DATA_DIR = Path(os.environ.get("YOTO_USER_DATA_DIR", str(_PROJECT_ROOT / "user_data")))
+TOKEN_FILE    = Path(os.environ.get("YOTO_TOKEN_FILE",    str(USER_DATA_DIR / "yoto_tokens.json")))
+SCHEDULE_FILE = Path(os.environ.get("YOTO_SCHEDULE_FILE", str(USER_DATA_DIR / "schedule.json")))
+EVENTS_FILE   = Path(os.environ.get("YOTO_EVENTS_FILE",   str(USER_DATA_DIR / "events.json")))
 
 YOTO_AUTH_URL = "https://login.yotoplay.com/oauth/device/code"
 YOTO_TOKEN_URL = "https://login.yotoplay.com/oauth/token"

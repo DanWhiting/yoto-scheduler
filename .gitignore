@@ -9,7 +9,5 @@ wheels/
 # Virtual environments
 .venv
 
-# Local runtime state (per-deployment)
-yoto_tokens.json
-schedule.json
-events.json
+# Local runtime state (per-deployment) — refresh tokens, schedule, events
+user_data/

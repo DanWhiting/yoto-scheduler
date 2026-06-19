@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from yoto_api import YotoClient, YotoError
 
 from . import auth, config, events, scheduler, storage
+from .dry_run import WriteGuard
 from .ui import routes as ui_routes
 
 log = logging.getLogger(__name__)
@@ -86,9 +87,15 @@ def _start_events(state: State) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     state = State()
-    state.client = YotoClient(client_id=config.CLIENT_ID)
+    # Wrap the client in a write-guard so dry-run mode intercepts mutating calls.
+    # Proxy is duck-type-compatible with YotoClient; type checkers can't see
+    # through __getattr__ so the assignment needs an explicit ignore.
+    state.client = WriteGuard(YotoClient(client_id=config.CLIENT_ID), dry_run=config.DRY_RUN)  # type: ignore[assignment]
     await state.client.__aenter__()
     app.state.yoto = state
+
+    if config.DRY_RUN:
+        log.warning("DRY-RUN MODE: mutating Yoto API calls will be logged and skipped.")
 
     blob = storage.load()
     if blob and "refresh_token" in blob:
@@ -176,6 +183,7 @@ async def healthz() -> dict:
         "player_count": len(s.client.players) if s.authorized else 0,
         "auth_flow_state": s.auth_flow.state if s.auth_flow else None,
         "mqtt_connected": s.client.is_mqtt_connected if s.authorized else False,
+        "dry_run": getattr(s.client, "dry_run", False),
     }
 
 

@@ -152,10 +152,17 @@ async def settings_page(request: Request) -> Any:
 @router.get("/ui/partials/health", response_class=HTMLResponse)
 async def health_partial(request: Request) -> HTMLResponse:
     s = _state(request)
+    dry_badge = (
+        '<span class="dry-run-badge" title="No mutating calls will hit Yoto">DRY-RUN</span>'
+        if getattr(s.client, "dry_run", False) else ''
+    )
     if s.authorized:
         mqtt = "MQTT ok" if s.client.is_mqtt_connected else "MQTT down"
-        return HTMLResponse(f'<span class="dot dot-on"></span> linked · {len(s.client.players)} player(s) · {mqtt}')
-    return HTMLResponse('<span class="dot dot-off"></span> not linked')
+        return HTMLResponse(
+            f'{dry_badge}<span class="dot dot-on"></span> linked · '
+            f'{len(s.client.players)} player(s) · {mqtt}'
+        )
+    return HTMLResponse(f'{dry_badge}<span class="dot dot-off"></span> not linked')
 
 
 @router.get("/ui/partials/auth-status", response_class=HTMLResponse)
