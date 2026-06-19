@@ -1,0 +1,30 @@
+# Pi / LAN deployment recipe.
+#
+# First-time setup on the Pi:
+#   git clone <repo> /opt/yoto-bridge
+#   cd /opt/yoto-bridge
+#   docker compose up -d --build
+#   # Then visit http://<pi-host>:8765/ui/settings on a phone/laptop on the LAN
+#   # to authorise (device-code flow). Token persists to ./user_data/.
+
+services:
+  yoto-bridge:
+    build: .
+    image: yoto-bridge:local
+    container_name: yoto-bridge
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    volumes:
+      # Persists yoto_tokens.json, schedule.json, events.json across container
+      # rebuilds. Owned by uid 1000 (the `yoto` user inside the image); chown
+      # the host directory accordingly if you hit permission errors on first run.
+      - ./user_data:/data
+    environment:
+      # Set to "1" to log-and-skip every mutating Yoto API call (recommended
+      # for the first dry-run on the Pi before swapping in real volume caps).
+      YOTO_BRIDGE_DRY_RUN: ""
+      # Override if you've registered your own Yoto OAuth client.
+      # YOTO_CLIENT_ID: ""
+    # The bridge reaches Yoto over the public internet (HTTPS + MQTT TLS);
+    # default bridge networking is sufficient — no host-mode required.

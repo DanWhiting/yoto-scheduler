@@ -1,0 +1,23 @@
+.git
+.gitignore
+.venv
+__pycache__
+**/__pycache__
+*.py[co]
+*.egg-info
+build
+dist
+wheels
+
+# Per-deployment runtime state — must be a bind mount, not baked in.
+user_data
+
+# Dev-only assets that have no place in the image.
+docs
+scripts
+CLAUDE.md
+.python-version
+
+# IDE
+.vscode
+.idea

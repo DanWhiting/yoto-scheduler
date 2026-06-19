@@ -98,9 +98,24 @@ YOTO_BRIDGE_HOST=0.0.0.0 YOTO_BRIDGE_DRY_RUN=1 uv run python -m yoto_bridge
 
 `/` → redirects to `/ui/routines`. Authorise once via `/ui/settings` (device-code flow). MQTT event stream connects automatically.
 
+## Deployment (Pi / Docker)
+
+Multi-stage [Dockerfile](Dockerfile) + [docker-compose.yml](docker-compose.yml). Designed for `linux/arm64` (Pi 4/5) but builds on amd64 too — Bookworm slim base.
+
+```
+# On the Pi:
+git clone <repo> /opt/yoto-bridge
+cd /opt/yoto-bridge
+docker compose up -d --build
+# Then visit http://<pi-host>:8765/ui/settings to authorise.
+```
+
+State persists to `./user_data/` on the host (bind mount → `/data` in the container). The container runs as uid 1000 — chown the host directory if you hit permission errors on first run. Port 8765 is mapped. `DRY_RUN` is blank by default (real mode); flip it to `"1"` in `docker-compose.yml` for a no-mutation first pass.
+
+The project has no `[build-system]` in `pyproject.toml`, so uv only installs dependencies — the runtime image puts `yoto_bridge/` on `PYTHONPATH` directly. Don't add a build-system unless you also restructure the package; the current shape relies on the path trick.
+
 ## Things deliberately deferred
 
-- **Containerise + deploy to Pi.** Plan: linux/arm64 Docker image, build on the Pi. Already discussed but not done.
 - **Player selector on the Routines page.** Routines currently shows all players in one view; Events has a per-player segmented selector. Routines should follow.
 - **Tone discovery for tones the user hasn't assigned as alarms.** Workaround documented in the gotchas section. Real fix would be an "+ Add tone by ID" affordance in the picker, persisted in a separate JSON file.
 - **`uvicorn --reload` for dev.** Manual restarts are noisy. Worth wiring in alongside the Docker work.
