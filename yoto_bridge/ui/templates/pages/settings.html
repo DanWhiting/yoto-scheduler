@@ -10,11 +10,15 @@
     <header class="settings-card-head">
       <h3>Yoto Account</h3>
       {% if authorized %}
-        <sl-badge variant="success" pill>Connected</sl-badge>
+        <span class="status-icon status-icon-ok" title="Connected" aria-label="Connected">
+          <sl-icon name="check-lg"></sl-icon>
+        </span>
       {% elif auth_flow %}
         <sl-badge variant="warning" pill>Authorising…</sl-badge>
       {% else %}
-        <sl-badge variant="neutral" pill>Not Connected</sl-badge>
+        <span class="status-icon status-icon-error" title="Not connected" aria-label="Not connected">
+          <sl-icon name="x-lg"></sl-icon>
+        </span>
       {% endif %}
     </header>
 
@@ -28,18 +32,39 @@
           <dt>Live Event Stream (MQTT)</dt>
           <dd>
             {% if mqtt_connected %}
-              <sl-badge variant="success" pill>Connected</sl-badge>
+              <span class="status-icon status-icon-ok" title="Connected" aria-label="Connected">
+                <sl-icon name="check-lg"></sl-icon>
+              </span>
             {% else %}
-              <sl-badge variant="danger" pill>Disconnected</sl-badge>
+              <span class="status-icon status-icon-error" title="Disconnected" aria-label="Disconnected">
+                <sl-icon name="x-lg"></sl-icon>
+              </span>
             {% endif %}
           </dd>
         </div>
       </dl>
       <footer class="settings-card-foot">
-        <form method="post" action="/ui/auth/logout">
-          <sl-button type="submit" variant="default">Disconnect Yoto Account</sl-button>
-        </form>
+        <sl-button class="btn-quiet-destructive"
+                   onclick="document.getElementById('confirm-disconnect').show()">
+          <sl-icon slot="prefix" name="box-arrow-right"></sl-icon>
+          Disconnect Yoto Account
+        </sl-button>
       </footer>
+
+      <sl-dialog id="confirm-disconnect" label="Disconnect Yoto Account?">
+        <p>This clears the saved authentication token. You'll need to authorise again before the bridge can talk to your players.</p>
+        <p class="settings-blurb">Your routines, events, and group settings stay — only the connection is reset.</p>
+        <sl-button slot="footer"
+                   onclick="document.getElementById('confirm-disconnect').hide()">
+          Cancel
+        </sl-button>
+        <form slot="footer" method="post" action="/ui/auth/logout" style="display: contents;">
+          <sl-button type="submit" class="btn-quiet-destructive">
+            <sl-icon slot="prefix" name="box-arrow-right"></sl-icon>
+            Disconnect
+          </sl-button>
+        </form>
+      </sl-dialog>
 
     {% elif auth_flow %}
       <p class="settings-blurb">Open the authorisation page on a device, sign in, and approve the scheduler.</p>

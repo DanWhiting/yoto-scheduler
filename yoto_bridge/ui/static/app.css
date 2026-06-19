@@ -309,6 +309,56 @@ sl-menu-item.menu-item-destructive sl-icon { color: var(--ys-error); }
 
 /* ----- Settings page ------------------------------------- */
 
+/* Compact circular status indicator: coloured circle with a white icon
+ * inside (tick for OK, cross for error). Replaces colourful text badges. */
+.status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.85rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.status-icon-ok    { background: var(--ys-success); }
+.status-icon-error { background: var(--ys-error); }
+
+/* A quiet button that hints at a destructive action only on hover —
+ * used for "Disconnect Yoto Account". Avoids Shoelace's stock neutral
+ * blue tint until we retheme the full neutral palette. */
+/* Pico CSS targets `[type=submit]`, `[type=button]`, `[type=reset]`, and
+ * `[role=button]` as native buttons. Shoelace's <sl-button> forwards `type`
+ * to its host, so Pico paints the *host* with its primary blue background
+ * around Shoelace's actual button.
+ *
+ * Pico's attribute selectors have specificity (0,1,0); a bare `sl-button`
+ * element selector is (0,0,1) — it loses. !important is the cleanest fix
+ * here: any sl-button-shaped host inherits no Pico styling. */
+sl-button {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  color: inherit !important;
+  font: inherit !important;
+}
+
+sl-button.btn-quiet-destructive::part(base) {
+  background: var(--ys-surface);
+  border-color: var(--ys-border-strong);
+  color: var(--ys-muted);
+}
+sl-button.btn-quiet-destructive:hover::part(base) {
+  background: var(--ys-error-soft);
+  border-color: var(--ys-error);
+  color: var(--ys-error);
+}
+
+
 .settings-card {
   background: var(--ys-surface);
   border: 1px solid var(--ys-border);

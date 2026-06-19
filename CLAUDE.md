@@ -59,6 +59,11 @@ docs/STYLE.md       UI design language (tokens, components, copy)
 - **Windows + aiomqtt**: must force `WindowsSelectorEventLoopPolicy` (Proactor doesn't implement `add_reader`). Handled in `__main__.py`. Doesn't affect Linux.
 - **Yoto alarm `sound_id` values and the 3 Yoto Radio URIs** are not exposed by `yoto-api` or documented in Yoto's developer docs. The Events `radio` and `alarm_tone` action types are stubbed in [events.py](yoto_bridge/events.py) until we discover them — likely by reading them off a player whose Yoto-app has them configured.
 
+## UI gotchas (already worked around)
+
+- **Pico styles `[type=submit|button|reset]`** as native buttons. Those attribute selectors also match Shoelace `<sl-button>` hosts because Shoelace forwards `type` to the host for form integration. Result: stray Pico-primary-blue background painted *around* every Shoelace button. The `sl-button { background: transparent !important; … }` reset at the top of `app.css` neutralises it. If you see Pico-coloured rectangles surrounding a Shoelace control, this is the cause.
+- **`<sl-select>` defaults**: prefer a literal HTML `value="…"` attribute over Alpine's reactive `:value=` for initial selection. Shoelace reads value during component upgrade; Alpine binding can land before the `<sl-option>` children are slotted, leaving the select empty.
+
 ## Configuration (env vars)
 
 | Variable | Default | Purpose |
