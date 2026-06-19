@@ -94,10 +94,13 @@
           <div class="event-row event-row-action">
             <label>
               <small>Action</small>
-              {# Static `value="card"` is set at HTML parse time so sl-select picks
-                 it up during component upgrade. Card is the only enabled action so
-                 this is functionally correct until radio/alarm_tone come online. #}
-              <sl-select value="card" @sl-change="setActionType(event, $event.target.value)">
+              {# Setting `.value` inside $nextTick rather than via `:value=` so
+                 Shoelace finishes upgrading the element + slotting its options
+                 BEFORE we assign — otherwise saved events of type radio /
+                 alarm_tone render as the empty default. (Background in
+                 CLAUDE.md's sl-select gotcha.) #}
+              <sl-select x-init="$nextTick(() => $el.value = event.action.type)"
+                         @sl-change="setActionType(event, $event.target.value)">
                 <sl-option value="card">Play a card</sl-option>
                 <sl-option value="radio">Play radio</sl-option>
                 <sl-option value="alarm_tone" :disabled="!hasAlarmTones()">
