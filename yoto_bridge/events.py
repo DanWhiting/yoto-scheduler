@@ -28,6 +28,19 @@ _TIME_RE = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
 _DAYS_RE = re.compile(r"^[01]{7}$")
 
 
+def raw_volume_to_percent(raw: int) -> int:
+    """Yoto's hardware volume is a 0-16 raw scale (what the device displays and
+    what set_player_config(day_max_volume_limit=…) accepts). But yoto_api's
+    `set_volume(player_id, v)` interprets `v` as a 0-100 percentage and snaps
+    it to the nearest raw step via VOLUME_MAPPING_INVERTED. So if the bridge
+    passes the raw value 8 (intending "half"), yoto_api reads "8%" and lands
+    on raw 1 (≈7%). Every call site that takes a raw 0-16 number from the UI
+    and hands it to set_volume must convert through this helper.
+    """
+    raw = max(0, min(16, int(raw)))
+    return round(raw / 16 * 100)
+
+
 class EventAction(BaseModel):
     """What to play when the event fires.
 
@@ -197,9 +210,10 @@ class EventsRunner:
             "Firing event '%s' on %s at %s (action=%s)",
             event.name or event.id, event.player_id, event.time, event.action.type,
         )
-        # Set playback volume (will still be clamped by the device's volume_max).
+        # Set playback volume. event.volume is on the raw 0-16 scale (UI slider);
+        # set_volume expects a percentage. The device's volume_max still clamps.
         try:
-            await self.client.set_volume(event.player_id, event.volume)
+            await self.client.set_volume(event.player_id, raw_volume_to_percent(event.volume))
         except Exception:
             log.exception("set_volume failed for event %s", event.id)
 
