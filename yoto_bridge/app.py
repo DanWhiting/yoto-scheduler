@@ -597,7 +597,8 @@ async def set_volume(device_id: str, body: VolumeBody) -> dict:
     if not 0 <= body.volume <= 16:
         raise HTTPException(status_code=400, detail="volume must be 0..16")
     try:
-        await s.client.set_volume(device_id, body.volume)
+        # body.volume is raw 0-16; set_volume expects 0-100 percentage.
+        await s.client.set_volume(device_id, events.raw_volume_to_percent(body.volume))
     except YotoError as e:
         raise HTTPException(status_code=502, detail=str(e))
     return {"ok": True}
