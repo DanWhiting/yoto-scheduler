@@ -24,6 +24,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM python:${PYTHON_VERSION}-slim-bookworm AS runtime
 
+# tzdata is required for the TZ env var to resolve named zones (otherwise
+# Python silently falls back to UTC and routines/events fire an hour off
+# during BST). Slim images don't ship it by default.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends tzdata \
+ && rm -rf /var/lib/apt/lists/*
+
 # Run as non-root. user_data/ is created/owned via bind-mount on the host.
 RUN useradd --create-home --uid 1000 yoto
 

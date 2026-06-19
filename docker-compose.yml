@@ -31,5 +31,9 @@ services:
       # Set to "1" to log-and-skip every mutating Yoto API call (recommended
       # for the first dry-run on the Pi before swapping in real volume caps).
       YOTO_BRIDGE_DRY_RUN: ""
+      # Container TZ. Defaults to London so routine/event HH:MM values fire at
+      # the family's wall-clock time year-round (auto-handles BST/GMT). Override
+      # in .env if you're somewhere else.
+      TZ: "${TZ:-Europe/London}"
     # The bridge reaches Yoto over the public internet (HTTPS + MQTT TLS);
     # default bridge networking is sufficient — no host-mode required.
