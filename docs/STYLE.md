@@ -187,19 +187,22 @@ Three states each page must implement explicitly:
 - Concrete, not generic. Mention the actual nouns (routine, player, card) instead of "item".
 - No exclamation marks; no emoji unless the user explicitly wants them.
 
-## What's already aligned
+## Patterns to reuse
 
-The current `app.css` implements:
+These reusable building blocks are already in `app.css`. Prefer composing them over inventing new ones.
 
-- The colour tokens (just under different names — `--ys-*` here).
-- Pill nav, 14px card radius, soft shadows.
-- Pico + Shoelace theming using these tokens.
-- Empty-state, save-state, loading states on the schedule page.
+- **Card picker dialog** (`.card-picker-dialog`, `.card-picker-grid`, `.picker-card-button`). Modal `<sl-dialog>` with optional search input + grid of card tiles. Used by the events action picker (single-select) and the routines whitelist (multi-select via `.selected` modifier + `.whitelist-check` overlay). Don't build a second dialog shape for picking cards.
+- **Group chips** (`.whitelist-group-chip`). Pill-shaped, image + name + card-count, with a `.selected` state. Toggle pattern for multi-select. Used in the whitelist dialog.
+- **`.card-pick-trigger`** — the button that opens any card picker. Compact, inline, shows current selection (image + title + chevron) or a placeholder. Used by both the events action selector and the routines whitelist row.
+- **Volume slider widget** (`.volume-slider .slider-row`). Shared between routines and events — `<sl-range>` plus a value readout, with a `--val` custom property driving the fill gradient.
+- **Status icons** (`.status-icon-ok`, `.status-icon-error`). Green/red filled circles with a tick / X. Used on settings and inline status displays. Prefer over `<sl-badge>` for binary state.
+- **`.caption`** — reusable uppercase caption text (small, muted, letter-spaced). Use instead of inline `label > small` styling.
+- **Routine/event card layout** — surface white, `--ys-radius` corners, level-1 shadow, lifts to level-2 on hover, internal padding 16/20px. The `⋮` action menu sits absolute top-right.
 
-## What to migrate (not done yet)
+## Already aligned
 
-- Add `--ys-radius-xs` (currently we mix 4 and 10).
-- Add `--ys-shadow-3` for future modals.
-- Add a `@media (prefers-reduced-motion: reduce)` block in `app.css`.
-- Move uppercase caption styling into a reusable `.caption` class instead of `label > small`.
-- Audit touch targets: `<sl-icon-button>` defaults to ~32px which is below the 44px ideal; bump via CSS.
+- `--ys-*` colour tokens, all three shadow levels, all four radius tokens, the `--ys-tap-target` touch-target token.
+- Pico + Shoelace themed via the same `--ys-*` tokens.
+- `@media (prefers-reduced-motion: reduce)` block in `app.css` cancels transform/transition animations.
+- `<sl-icon-button>::part(base)` raised to `--ys-tap-target` (44px) globally.
+- Empty / loading / saving / saved / error states on every editor page (routines, events).

@@ -55,6 +55,7 @@ yoto_bridge/
     routes.py       HTML routes at /ui/*
     templates/      Jinja templates (base.html + pages/*.html + partials/*)
     static/         app.css + vendored deps (Pico, HTMX, Alpine, Shoelace)
+scripts/            One-off investigative scripts (e.g. probe_tones.py)
 docs/STYLE.md       UI design language (tokens, components, copy)
 ```
 
@@ -66,7 +67,8 @@ docs/STYLE.md       UI design language (tokens, components, copy)
 - **Rich device fields** (network, wifi, power source, temperature) are on `PlayerExtendedStatus`, not `PlayerStatus`.
 - **`crypto.randomUUID()` requires HTTPS or localhost.** Over LAN HTTP it's undefined on mobile Safari. UI uses a local `uid()` helper (Math.random + Date.now).
 - **Windows + aiomqtt**: must force `WindowsSelectorEventLoopPolicy` (Proactor doesn't implement `add_reader`). Handled in `__main__.py`. Doesn't affect Linux.
-- **Yoto alarm `sound_id` values and the 3 Yoto Radio URIs** are not exposed by `yoto-api` or documented in Yoto's developer docs. The Events `radio` and `alarm_tone` action types are stubbed in [events.py](yoto_bridge/events.py) until we discover them — likely by reading them off a player whose Yoto-app has them configured.
+- **Radios and alarm tones are normal library cards.** Yoto's "Yoto Radio / Yoto Daily / Sleep Radio / Classical Radio" cards live in the family library and are recognised by a title heuristic (`/\bradio\b|^yoto daily$/i`). Alarm-tone cards (e.g. `4OD25` "Wake with Jake") are *not* in `/card/family/library` but are fetchable via `update_card_detail`. The bridge auto-discovers them on startup by reading every player's `PlayerConfig.alarms[].sound_id` and fetching each card detail — see `_discover_alarm_tones` in [app.py](yoto_bridge/app.py). Library response tags them `category: "tone"`. **Limitation**: only tones currently assigned as alarms are discovered — there is no Yoto endpoint listing all available tones (see [scripts/probe_tones.py](scripts/probe_tones.py) for the dead-end probes). Workaround: temporarily set an unfamiliar tone as an alarm in the Yoto app, refresh, then unset.
+- **Library load order**: `update_library()` must run *before* `_discover_alarm_tones()` in `_bring_online`. The tone discovery populates `client.library` with individual tone cards via `update_card_detail`, after which `/library`'s lazy-load check (`not s.client.library`) is False and the full library fetch is skipped — leaving the user with only the tones visible.
 
 ## UI gotchas (already worked around)
 
@@ -100,8 +102,9 @@ YOTO_BRIDGE_HOST=0.0.0.0 YOTO_BRIDGE_DRY_RUN=1 uv run python -m yoto_bridge
 
 - **Containerise + deploy to Pi.** Plan: linux/arm64 Docker image, build on the Pi. Already discussed but not done.
 - **Player selector on the Routines page.** Routines currently shows all players in one view; Events has a per-player segmented selector. Routines should follow.
-- **Action types `radio` and `alarm_tone`.** UI shows them as "coming soon" disabled options. Needs URI / sound_id discovery first.
+- **Tone discovery for tones the user hasn't assigned as alarms.** Workaround documented in the gotchas section. Real fix would be an "+ Add tone by ID" affordance in the picker, persisted in a separate JSON file.
 - **`uvicorn --reload` for dev.** Manual restarts are noisy. Worth wiring in alongside the Docker work.
+- **Whitelist UX polish.** "Allow Everything" button could become a primary action when something is selected; the dialog could show a count of total allowed cards (groups expanded). Skipped until the feature gets real-world use.
 
 ## Patterns to reuse
 
