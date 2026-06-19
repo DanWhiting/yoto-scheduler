@@ -24,11 +24,17 @@ class Routine(BaseModel):
     name: str
     volume_max: int = Field(ge=0, le=16)
 
+    # Allow forward-compat additions (e.g. card/group whitelists) to round-trip
+    # through older bridge versions without raising.
+    model_config = {"extra": "ignore"}
+
 
 class ScheduleConfig(BaseModel):
     routines: list[Routine] = Field(default_factory=list)
     # device_id -> {routine_name: "HH:MM"}
     schedules: dict[str, dict[str, str]] = Field(default_factory=dict)
+
+    model_config = {"extra": "ignore"}
 
     @field_validator("routines")
     @classmethod
