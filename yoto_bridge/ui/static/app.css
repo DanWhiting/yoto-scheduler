@@ -582,6 +582,113 @@ sl-button.btn-quiet-destructive:hover::part(base) {
 }
 
 
+/* ----- Routine whitelist editor -------------------------- */
+
+.routine-whitelist { margin-top: 0.85rem; }
+
+.whitelist-dialog::part(panel) {
+  max-width: 44rem;
+  width: min(92vw, 44rem);
+}
+.whitelist-blurb {
+  color: var(--ys-muted);
+  margin: 0 0 1rem;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+.whitelist-section-head {
+  margin: 1.2rem 0 0.6rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+}
+.whitelist-section-head small {
+  color: var(--ys-muted);
+  font-weight: 400;
+  font-size: 0.85em;
+}
+
+.whitelist-group-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 0.4rem;
+}
+.whitelist-group-chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.75rem 0.45rem 0.45rem;
+  border: 1px solid var(--ys-border-strong);
+  border-radius: var(--ys-radius-pill);
+  background: var(--ys-surface);
+  color: var(--ys-text);
+  font-family: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+}
+.whitelist-group-chip:hover {
+  border-color: var(--ys-primary);
+  background: var(--ys-primary-soft);
+}
+.whitelist-group-chip:focus-visible {
+  outline: none;
+  border-color: var(--ys-primary);
+  box-shadow: 0 0 0 3px var(--ys-primary-soft);
+}
+.whitelist-group-chip img {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: var(--ys-radius-xs);
+  object-fit: cover;
+  background: var(--ys-track-bg);
+}
+.whitelist-group-name {
+  font-weight: 500;
+  max-width: 12rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.whitelist-group-chip small { color: var(--ys-muted); }
+.whitelist-group-chip .whitelist-check {
+  font-size: 1.05rem;
+  color: var(--ys-primary);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.whitelist-group-chip.selected {
+  border-color: var(--ys-primary);
+  background: var(--ys-primary-soft);
+}
+.whitelist-group-chip.selected .whitelist-check { opacity: 1; }
+
+.whitelist-card-grid { margin-top: 0.6rem; }
+
+.whitelist-card-button {
+  position: relative;
+  transition: box-shadow 120ms ease, transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+.whitelist-card-button.selected {
+  border-color: var(--ys-primary);
+  background: var(--ys-primary-soft);
+  box-shadow: 0 0 0 2px var(--ys-primary-soft);
+}
+.whitelist-card-button .whitelist-check {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  font-size: 1.3rem;
+  color: var(--ys-primary);
+  background: var(--ys-surface);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.whitelist-card-button.selected .whitelist-check { opacity: 1; }
+
+
 /* ----- Events page --------------------------------------- */
 
 .player-selector {

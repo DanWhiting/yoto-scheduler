@@ -23,9 +23,12 @@ log = logging.getLogger(__name__)
 class Routine(BaseModel):
     name: str
     volume_max: int = Field(ge=0, le=16)
+    # Both empty = no restriction (the default). Otherwise the union of these
+    # IDs (with groups expanded to their member card-IDs at enforce-time) is
+    # the set of cards the player may play during this routine.
+    allowed_card_ids: list[str] = Field(default_factory=list)
+    allowed_group_ids: list[str] = Field(default_factory=list)
 
-    # Allow forward-compat additions (e.g. card/group whitelists) to round-trip
-    # through older bridge versions without raising.
     model_config = {"extra": "ignore"}
 
 
@@ -146,6 +149,34 @@ class Scheduler:
             if r.name == name:
                 return r.volume_max
         return None
+
+    def active_routine(self, device_id: str, now: datetime | None = None) -> Routine | None:
+        """The Routine object currently active for a player, or None."""
+        transitions = self.cfg.schedules.get(device_id)
+        if not transitions:
+            return None
+        name = current_routine(transitions, now)
+        if name is None:
+            return None
+        for r in self.cfg.routines:
+            if r.name == name:
+                return r
+        return None
+
+    def resolved_allowed_cards(self, routine: Routine) -> set[str] | None:
+        """Union of allowed_card_ids and the card-IDs of each allowed group.
+
+        Returns None when the routine has no whitelist (allow everything).
+        """
+        if not routine.allowed_card_ids and not routine.allowed_group_ids:
+            return None
+        allowed = set(routine.allowed_card_ids)
+        groups = getattr(self.client, "groups", {}) or {}
+        for gid in routine.allowed_group_ids:
+            group = groups.get(gid)
+            if group is not None:
+                allowed.update(getattr(group, "card_ids", []) or [])
+        return allowed
 
     def status_for(self, device_id: str) -> dict | None:
         transitions = self.cfg.schedules.get(device_id)

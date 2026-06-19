@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from yoto_api import YotoClient, YotoError
 
-from . import auth, config, events, scheduler, storage
+from . import auth, config, enforcer as enforcer_mod, events, scheduler, storage
 from .dry_run import WriteGuard
 from .ui import routes as ui_routes
 
@@ -32,6 +32,7 @@ class State:
     events_task: asyncio.Task[Any] | None = None
     sched: scheduler.Scheduler | None = None
     events_runner: events.EventsRunner | None = None
+    enforcer: enforcer_mod.Enforcer | None = None
 
 
 async def _bring_online(state: State, blob: dict) -> None:
@@ -42,9 +43,12 @@ async def _bring_online(state: State, blob: dict) -> None:
     await state.client.update_all_player_info()
     state.authorized = True
     log.info("Linked; %d player(s) loaded.", len(state.client.players))
-    _start_events(state)
     state.sched = scheduler.Scheduler(state.client)
     await state.sched.start()
+    state.enforcer = enforcer_mod.Enforcer(state.client, state.sched)
+    # Start MQTT subscription AFTER scheduler+enforcer exist so the on_update
+    # closure has something to dispatch to from the first event onward.
+    _start_events(state)
     # Load the full library BEFORE discovering tones — otherwise the tone
     # discovery adds individual cards via update_card_detail, the library
     # becomes "non-empty but partial", and /library's lazy-load check then
@@ -84,6 +88,11 @@ def _start_events(state: State) -> None:
         # connect_events mutates client.players in place; this hook is the
         # extension point for future SSE / MQTT fan-out.
         log.debug("event: %s", getattr(getattr(player, "device", None), "name", "?"))
+        if state.enforcer is not None:
+            try:
+                await state.enforcer.check(player)
+            except Exception:
+                log.exception("Enforcer check crashed")
 
     async def runner() -> None:
         try:

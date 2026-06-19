@@ -6,7 +6,7 @@ Context for continuing work on yoto-scheduler. Keep this short — work from con
 
 A LAN-only Python bridge for managing a family of Yoto players from a Raspberry Pi (or any LAN device). Wraps the async `yoto-api` library with:
 
-- **Routines**: time-window volume caps per player.
+- **Routines**: time-window volume caps per player, with an optional card/group whitelist that reactively stops disallowed cards.
 - **Events**: scheduled playback actions per player.
 - **Library / Groups**: read-only views.
 - A mobile-friendly web UI at `/ui/*`. JSON API at the top level.
@@ -31,6 +31,14 @@ Only two fields, both via `scheduler.apply_cap`:
 
 Both set to the same value (the routine's cap), effectively overriding Yoto's day/night volume distinction. Everything else (alarms, ambient colours, brightness, day/night times, Yoto Daily / Radio URIs) is left alone.
 
+Plus reactive `stop` calls from the whitelist [Enforcer](yoto_bridge/enforcer.py) when a player starts playing a card outside the active routine's whitelist.
+
+## Whitelist enforcement (Routines)
+
+A routine can carry `allowed_card_ids` + `allowed_group_ids`. Empty both = unrestricted (default). Otherwise the [Enforcer](yoto_bridge/enforcer.py) watches every MQTT `on_update` and calls `client.stop(device_id)` when the now-playing card_id isn't in the resolved union (groups expanded against `client.groups`).
+
+Hard ceiling: there's **no Yoto API to refuse a card outright** — enforcement is reactive only. Expect 1–3s of audio before the stop lands. If the bridge process is offline, nothing is enforced. The Enforcer dedups on `(device_id, card_id)` so it issues one `stop` per insertion, not one per MQTT message.
+
 ## Architecture
 
 ```
@@ -38,6 +46,7 @@ yoto_bridge/
   app.py            FastAPI app, lifespan, JSON API, State, serializers
   dry_run.py        WriteGuard proxy; WRITE_METHODS is the canonical list
   scheduler.py      Routines: per-player asyncio.Task per scheduled player
+  enforcer.py       Reactive whitelist enforcement via the MQTT on_update hook
   events.py         Events: per-player asyncio.Task per enabled event
   auth.py           Manual OAuth device-code flow with explicit scopes
   storage.py        Token blob — atomic-write JSON

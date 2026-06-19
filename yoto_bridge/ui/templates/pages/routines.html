@@ -100,6 +100,20 @@
               </div>
             </template>
           </div>
+
+          <div class="card-pick-wrap routine-whitelist">
+            <small class="caption">Allowed Cards</small>
+            <button type="button"
+                    class="card-pick-trigger"
+                    @click="openWhitelist(r)">
+              <span class="card-pick-current">
+                <sl-icon class="card-pick-fallback"
+                         :name="whitelistEmpty(r) ? 'unlock' : 'shield-check'"></sl-icon>
+                <span class="card-pick-title" x-text="whitelistSummary(r)"></span>
+              </span>
+              <sl-icon name="chevron-right" class="card-pick-chevron"></sl-icon>
+            </button>
+          </div>
         </article>
       </template>
 
@@ -108,6 +122,72 @@
         <p>Add one to set a volume limit for part of the day — try a quiet <em>Bedtime</em> or a louder <em>Daytime</em>.</p>
       </div>
     </div>
+
+    {# Whitelist editor — shared across routine cards. #}
+    <sl-dialog :label="whitelistOpen ? ('Allowed Cards · ' + (editingRoutineName() || 'Routine')) : ''"
+               class="card-picker-dialog whitelist-dialog"
+               :open="whitelistOpen"
+               @sl-after-hide="closeWhitelist()">
+      <p class="whitelist-blurb">
+        Pick the cards and groups that are allowed during this routine.
+        Anything else will be stopped within a couple of seconds of starting.
+        Leave empty to allow everything (the default).
+      </p>
+
+      <h4 class="whitelist-section-head">Groups <small x-text="'(' + groups.length + ')'"></small></h4>
+      <div x-show="!groups.length" class="muted-note">
+        No groups in your library. Create them in the Yoto app to enable group-based whitelists.
+      </div>
+      <div class="whitelist-group-strip" x-show="groups.length">
+        <template x-for="g in groups" :key="g.id">
+          <button type="button"
+                  class="whitelist-group-chip"
+                  :class="{ selected: selectedGroupIds.includes(g.id) }"
+                  @click="toggleGroup(g.id)">
+            <img :src="g.image_url || ''"
+                 :alt="g.name || 'Group'"
+                 referrerpolicy="no-referrer"
+                 onerror="this.style.visibility='hidden'" />
+            <span class="whitelist-group-name" x-text="g.name || '(unnamed)'"></span>
+            <small x-text="g.card_count + ' card' + (g.card_count === 1 ? '' : 's')"></small>
+            <sl-icon class="whitelist-check" name="check-circle-fill"></sl-icon>
+          </button>
+        </template>
+      </div>
+
+      <h4 class="whitelist-section-head">Individual Cards</h4>
+      <sl-input class="card-picker-search"
+                placeholder="Search title, author, series…"
+                clearable
+                :value="whitelistQuery"
+                @sl-input="whitelistQuery = $event.target.value">
+        <sl-icon slot="prefix" name="search"></sl-icon>
+      </sl-input>
+      <div class="card-picker-grid whitelist-card-grid">
+        <template x-for="c in filteredWhitelistCards()" :key="c.id">
+          <button type="button"
+                  class="picker-card-button whitelist-card-button"
+                  :class="{ selected: selectedCardIds.includes(c.id) }"
+                  @click="toggleCard(c.id)">
+            <div class="library-card-art">
+              <img :src="c.cover_image_large || ''"
+                   :alt="c.title || 'Untitled card'"
+                   loading="lazy"
+                   referrerpolicy="no-referrer"
+                   onerror="this.style.visibility='hidden'" />
+            </div>
+            <div class="library-card-text">
+              <span class="library-card-title" x-text="c.title || '(untitled)'"></span>
+              <span class="library-card-author" x-text="c.author || ''"></span>
+            </div>
+            <sl-icon class="whitelist-check" name="check-circle-fill"></sl-icon>
+          </button>
+        </template>
+      </div>
+
+      <sl-button slot="footer" @click="clearWhitelist()">Allow Everything</sl-button>
+      <sl-button slot="footer" variant="primary" @click="finishWhitelist()">Done</sl-button>
+    </sl-dialog>
   </div>
 
   <style>[x-cloak] { display: none !important; }</style>
@@ -128,6 +208,8 @@
     return {
       routines: [],
       devices: [],
+      groups: [],
+      cards: [],
       loading: true,
       loadError: '',
       editingId: null,
@@ -135,6 +217,13 @@
       saveError: '',
       _saveSeq: 0,
       _lastDoneSeq: 0,
+
+      // Whitelist dialog state.
+      whitelistOpen: false,
+      whitelistRoutineId: null,
+      selectedGroupIds: [],
+      selectedCardIds: [],
+      whitelistQuery: '',
 
       startEdit(id) {
         this.editingId = id;
@@ -148,14 +237,25 @@
 
       async load() {
         try {
-          const data = await fetch('/schedule').then(r => r.json());
-          this.devices = data.known_devices || [];
-          this.routines = (data.config.routines || []).map(r => ({
+          // Schedule + library + groups in parallel — none depend on each other.
+          const [schedule, library, groups] = await Promise.all([
+            fetch('/schedule').then(r => r.json()),
+            fetch('/library').then(r => r.json()).catch(() => []),
+            fetch('/groups').then(r => r.json()).catch(() => []),
+          ]);
+          this.devices = schedule.known_devices || [];
+          // Exclude tones from the whitelist picker — they're event-only.
+          this.cards = (library || []).filter(c => c.category !== 'tone');
+          this.cards.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+          this.groups = groups || [];
+          this.routines = (schedule.config.routines || []).map(r => ({
             id: uid(),
             name: r.name,
             volume_max: r.volume_max,
+            allowed_card_ids: r.allowed_card_ids || [],
+            allowed_group_ids: r.allowed_group_ids || [],
             times: Object.fromEntries(this.devices.map(d => {
-              const sched = (data.config.schedules || {})[d.device_id] || {};
+              const sched = (schedule.config.schedules || {})[d.device_id] || {};
               return [d.device_id, sched[r.name] || ''];
             })),
           }));
@@ -164,6 +264,81 @@
         } finally {
           this.loading = false;
         }
+      },
+
+      whitelistEmpty(r) {
+        return !(r.allowed_group_ids || []).length && !(r.allowed_card_ids || []).length;
+      },
+
+      whitelistSummary(r) {
+        if (this.whitelistEmpty(r)) return 'Allow everything';
+        const groupNames = (r.allowed_group_ids || [])
+          .map(id => (this.groups.find(g => g.id === id) || {}).name)
+          .filter(Boolean);
+        const cardCount = (r.allowed_card_ids || []).length;
+        const parts = [];
+        if (groupNames.length) parts.push(groupNames.join(', '));
+        if (cardCount) parts.push(cardCount + (cardCount === 1 ? ' card' : ' cards'));
+        return parts.join(' + ') || 'Allow everything';
+      },
+
+      editingRoutineName() {
+        const r = this.routines.find(x => x.id === this.whitelistRoutineId);
+        return r ? r.name : '';
+      },
+
+      openWhitelist(r) {
+        this.whitelistRoutineId = r.id;
+        this.selectedGroupIds = [...(r.allowed_group_ids || [])];
+        this.selectedCardIds = [...(r.allowed_card_ids || [])];
+        this.whitelistQuery = '';
+        this.whitelistOpen = true;
+      },
+
+      closeWhitelist() {
+        // Called via sl-after-hide — also fires when we close programmatically
+        // via finishWhitelist(). Guard against double-applying.
+        if (!this.whitelistOpen) return;
+        this.whitelistOpen = false;
+        this.whitelistRoutineId = null;
+      },
+
+      finishWhitelist() {
+        const r = this.routines.find(x => x.id === this.whitelistRoutineId);
+        if (r) {
+          r.allowed_group_ids = [...this.selectedGroupIds];
+          r.allowed_card_ids = [...this.selectedCardIds];
+          this.autosave();
+        }
+        this.whitelistOpen = false;
+        this.whitelistRoutineId = null;
+      },
+
+      clearWhitelist() {
+        this.selectedGroupIds = [];
+        this.selectedCardIds = [];
+      },
+
+      toggleGroup(id) {
+        const i = this.selectedGroupIds.indexOf(id);
+        if (i >= 0) this.selectedGroupIds.splice(i, 1);
+        else this.selectedGroupIds.push(id);
+      },
+
+      toggleCard(id) {
+        const i = this.selectedCardIds.indexOf(id);
+        if (i >= 0) this.selectedCardIds.splice(i, 1);
+        else this.selectedCardIds.push(id);
+      },
+
+      filteredWhitelistCards() {
+        const q = (this.whitelistQuery || '').trim().toLowerCase();
+        if (!q) return this.cards;
+        return this.cards.filter(c =>
+          (c.title || '').toLowerCase().includes(q) ||
+          (c.author || '').toLowerCase().includes(q) ||
+          (c.series_title || '').toLowerCase().includes(q)
+        );
       },
 
       sortedRoutines() {
@@ -180,6 +355,8 @@
           id,
           name: '',
           volume_max: 10,
+          allowed_card_ids: [],
+          allowed_group_ids: [],
           // Default every player's start time to noon so the user has something
           // concrete to nudge from, rather than a blank-looking control with no
           // visible cue that it needs setting.
@@ -200,6 +377,8 @@
         const routines = named.map(r => ({
           name: r.name.trim(),
           volume_max: parseInt(r.volume_max, 10),
+          allowed_card_ids: r.allowed_card_ids || [],
+          allowed_group_ids: r.allowed_group_ids || [],
         }));
         const schedules = {};
         for (const d of this.devices) {
