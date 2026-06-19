@@ -84,7 +84,7 @@
             const body = await resp.json().catch(() => ({}));
             throw new Error(body.detail || resp.statusText);
           }
-          const data = await resp.json();
+          const data = (await resp.json()).filter(c => c.category !== 'tone');
           data.sort((a, b) => {
             const sa = (a.series_title || '').toLowerCase();
             const sb = (b.series_title || '').toLowerCase();

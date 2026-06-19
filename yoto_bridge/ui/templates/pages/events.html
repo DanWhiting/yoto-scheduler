@@ -100,14 +100,18 @@
               <sl-select value="card" @sl-change="setActionType(event, $event.target.value)">
                 <sl-option value="card">Play a card</sl-option>
                 <sl-option value="radio">Play radio</sl-option>
-                <sl-option value="alarm_tone" disabled>Play alarm tone (coming soon)</sl-option>
+                <sl-option value="alarm_tone" :disabled="!hasAlarmTones()">
+                  Play alarm tone
+                </sl-option>
               </sl-select>
             </label>
 
-            {# Card/radio picker — same modal, filtered by event.action.type. #}
-            <div class="card-pick-wrap"
-                 x-show="event.action.type === 'card' || event.action.type === 'radio'">
-              <small class="caption" x-text="event.action.type === 'radio' ? 'Radio Station' : 'Card'"></small>
+            {# Card / radio / tone picker — same modal, filtered by event.action.type. #}
+            <div class="card-pick-wrap" x-show="['card','radio','alarm_tone'].includes(event.action.type)">
+              <small class="caption"
+                     x-text="event.action.type === 'radio' ? 'Radio Station'
+                            : event.action.type === 'alarm_tone' ? 'Alarm Tone'
+                            : 'Card'"></small>
               <button type="button"
                       class="card-pick-trigger"
                       @click="openCardPicker(event)">
@@ -121,15 +125,21 @@
                     </template>
                     <template x-if="!selectedCard(event).cover_image_large">
                       <sl-icon class="card-pick-fallback"
-                               :name="selectedCard(event).category === 'radio' ? 'broadcast' : 'music-note-list'"></sl-icon>
+                               :name="isToneCard(selectedCard(event)) ? 'bell'
+                                     : isRadioCard(selectedCard(event)) ? 'broadcast'
+                                     : 'music-note-list'"></sl-icon>
                     </template>
                     <span class="card-pick-title" x-text="selectedCard(event).title || '(untitled)'"></span>
                   </span>
                 </template>
                 <template x-if="!selectedCard(event)">
                   <span class="card-pick-placeholder">
-                    <sl-icon :name="event.action.type === 'radio' ? 'broadcast' : 'music-note-list'"></sl-icon>
-                    <span x-text="event.action.type === 'radio' ? 'Pick a radio station…' : 'Pick a card…'"></span>
+                    <sl-icon :name="event.action.type === 'radio' ? 'broadcast'
+                                   : event.action.type === 'alarm_tone' ? 'bell'
+                                   : 'music-note-list'"></sl-icon>
+                    <span x-text="event.action.type === 'radio' ? 'Pick a radio station…'
+                                 : event.action.type === 'alarm_tone' ? 'Pick an alarm tone…'
+                                 : 'Pick a card…'"></span>
                   </span>
                 </template>
                 <sl-icon name="chevron-right" class="card-pick-chevron"></sl-icon>
@@ -177,9 +187,11 @@
       </div>
     </div>
 
-    {# Card / radio picker modal — shared across all event cards. The same
+    {# Card / radio / tone picker modal — shared across all event cards. The same
        widget filters its contents based on which event's action triggered it. #}
-    <sl-dialog :label="pickerFilter === 'radio' ? 'Pick a Radio Station' : 'Pick a Card'"
+    <sl-dialog :label="pickerFilter === 'radio' ? 'Pick a Radio Station'
+                       : pickerFilter === 'alarm_tone' ? 'Pick an Alarm Tone'
+                       : 'Pick a Card'"
                class="card-picker-dialog"
                :open="pickerOpen"
                @sl-after-hide="pickerOpen = false">
@@ -237,11 +249,17 @@
 
   // Heuristic: Yoto's radio cards have "Radio" in the title (Yoto Radio,
   // Yoto Sleep Radio, Yoto Classical Radio…) or are exactly "Yoto Daily".
-  // We don't have a server-side category to rely on — every card returns
-  // `category: null` — so the title pattern is the cleanest available filter.
+  // Alarm tones are tagged server-side with category="tone" — the bridge
+  // discovers them from existing alarm sound_ids in PlayerConfig.alarms.
   const RADIO_TITLE_PATTERN = /(\bradio\b|^yoto daily$)/i;
   function isRadioCard(card) {
     return !!(card && RADIO_TITLE_PATTERN.test(card.title || ''));
+  }
+  function isToneCard(card) {
+    return !!(card && card.category === 'tone');
+  }
+  function isRegularCard(card) {
+    return !!(card && !isRadioCard(card) && !isToneCard(card));
   }
 
   function eventsEditor() {
@@ -316,9 +334,11 @@
         return this.cardIndex[event.action.card_id] || null;
       },
 
+      hasAlarmTones() { return this.cards.some(c => isToneCard(c)); },
+
       addEvent() {
         if (!this.selectedPlayerId) return;
-        const firstCard = this.cards.find(c => !isRadioCard(c));
+        const firstCard = this.cards.find(c => isRegularCard(c));
         const firstCardId = (firstCard && firstCard.id) || null;
         this.events.push({
           id: uid(),
@@ -349,12 +369,11 @@
       setActionType(event, type) {
         if (event.action.type === type) return;
         event.action.type = type;
-        // Switching types invalidates the previously-chosen target. Auto-pick
-        // a sensible default from the new type's pool so the event stays
-        // valid — the user can always change it via the picker.
-        const fallback = type === 'radio'
-          ? this.cards.find(c => isRadioCard(c))
-          : this.cards.find(c => !isRadioCard(c));
+        // Auto-pick a sensible default from the new type's pool so the event
+        // stays valid — the user can always change it via the picker.
+        const fallback = type === 'radio'      ? this.cards.find(c => isRadioCard(c))
+                       : type === 'alarm_tone' ? this.cards.find(c => isToneCard(c))
+                       :                         this.cards.find(c => isRegularCard(c));
         event.action.card_id = fallback ? fallback.id : null;
         event.action.chapter_key = null;
         event.action.track_key = null;
@@ -372,7 +391,8 @@
 
       openCardPicker(event) {
         this.pickerEventId = event.id;
-        this.pickerFilter = event.action.type === 'radio' ? 'radio' : 'card';
+        // Picker mirrors the event's action type so it shows the right subset.
+        this.pickerFilter = event.action.type;
         this.pickerQuery = '';
         this.pickerOpen = true;
       },
@@ -382,8 +402,10 @@
         let pool = this.cards;
         if (this.pickerFilter === 'radio') {
           pool = pool.filter(c => isRadioCard(c));
+        } else if (this.pickerFilter === 'alarm_tone') {
+          pool = pool.filter(c => isToneCard(c));
         } else {
-          pool = pool.filter(c => !isRadioCard(c));
+          pool = pool.filter(c => isRegularCard(c));
         }
         if (!q) return pool;
         return pool.filter(c =>
@@ -396,13 +418,15 @@
       pickCard(card) {
         const event = this.events.find(e => e.id === this.pickerEventId);
         if (event) {
-          // Radios are just cards — type only differs so the picker stays
-          // filtered and the track sub-picker stays hidden.
-          event.action.type = isRadioCard(card) ? 'radio' : 'card';
+          // Radios + tones are still played via play_card — the type only
+          // controls picker filter and (for cards) the track sub-picker.
+          event.action.type = isRadioCard(card) ? 'radio'
+                           : isToneCard(card)  ? 'alarm_tone'
+                           :                     'card';
           event.action.card_id = card.id;
           event.action.chapter_key = null;
           event.action.track_key = null;
-          if (!isRadioCard(card)) this.loadTracks(card.id);
+          if (event.action.type === 'card') this.loadTracks(card.id);
           this.autosave();
         }
         this.pickerOpen = false;

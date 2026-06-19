@@ -45,6 +45,18 @@ async def _bring_online(state: State, blob: dict) -> None:
     _start_events(state)
     state.sched = scheduler.Scheduler(state.client)
     await state.sched.start()
+    # Load the full library BEFORE discovering tones — otherwise the tone
+    # discovery adds individual cards via update_card_detail, the library
+    # becomes "non-empty but partial", and /library's lazy-load check then
+    # skips the full fetch (it only checks for emptiness).
+    try:
+        await state.client.update_library()
+    except Exception:
+        log.exception("Library update at startup failed; will retry on first /library hit.")
+    try:
+        await _discover_alarm_tones(state.client)
+    except Exception:
+        log.exception("Alarm-tone discovery failed")
     state.events_runner = events.EventsRunner(state.client)
     await state.events_runner.start()
 
@@ -317,6 +329,51 @@ def _serialize_card(card: Any) -> dict:
     }
 
 
+# Card IDs discovered to be alarm tones (each player's `alarms[].sound_id`).
+# These cards are not in /card/family/library but are fetchable by ID via
+# update_card_detail. We collect them on startup and tag them so the picker
+# can filter them out of the regular card view.
+_known_tone_ids: set[str] = set()
+
+
+async def _discover_alarm_tones(client: Any) -> None:
+    """Read alarm sound_ids from every player and fetch their card details.
+
+    Adds the cards to client.library and records the ids in _known_tone_ids so
+    /library can tag them with category='tone'.
+    """
+    seen: set[str] = set()
+    for player in client.players.values():
+        config = getattr(getattr(player, "info", None), "config", None)
+        if config is None:
+            continue
+        for alarm in (getattr(config, "alarms", None) or []):
+            sid = getattr(alarm, "sound_id", None)
+            if sid and sid not in seen:
+                seen.add(sid)
+    for sid in seen:
+        if sid in client.library:
+            _known_tone_ids.add(sid)
+            continue
+        try:
+            await client.update_card_detail(sid)
+            _known_tone_ids.add(sid)
+            log.info("Discovered alarm tone: %s", sid)
+        except Exception:
+            log.warning("Couldn't fetch alarm-tone card %s", sid, exc_info=True)
+
+
+def _tone_title_from_chapters(card: Any) -> str | None:
+    """Tone cards have title=null; the actual name lives in the first chapter."""
+    chapters = getattr(card, "chapters", None) or {}
+    iterable = chapters.values() if isinstance(chapters, dict) else iter(chapters)
+    for chapter in iterable:
+        title = getattr(chapter, "title", None)
+        if title:
+            return title
+    return None
+
+
 @app.get("/library")
 async def list_library(refresh: bool = False) -> list[dict]:
     """Return the family's card library. Pass ?refresh=1 to re-fetch from Yoto."""
@@ -327,7 +384,19 @@ async def list_library(refresh: bool = False) -> list[dict]:
             await s.client.update_library()
         except YotoError as e:
             raise HTTPException(status_code=502, detail=str(e))
-    return [_serialize_card(c) for c in s.client.library.values()]
+    if refresh:
+        # On explicit refresh, also re-discover tones from current alarm configs.
+        await _discover_alarm_tones(s.client)
+
+    out: list[dict] = []
+    for c in s.client.library.values():
+        item = _serialize_card(c)
+        if c.id in _known_tone_ids:
+            item["category"] = "tone"
+            if not item["title"]:
+                item["title"] = _tone_title_from_chapters(c)
+        out.append(item)
+    return out
 
 
 @app.get("/players/{device_id}/config")
@@ -354,22 +423,19 @@ async def get_player_config(device_id: str) -> dict:
 
 @app.get("/library/{card_id}/tracks")
 async def get_card_tracks(card_id: str) -> dict:
-    """Return the chapters + tracks of a card, fetching detail if needed."""
+    """Return the chapters + tracks of a card, fetching detail if needed.
+
+    Doesn't require the card to be in the family library — alarm tones and
+    other system cards are fetchable by ID but not "owned".
+    """
     s = _state()
     _require_authorized(s)
-    # Make sure we know about the card.
-    if not s.client.library:
-        try:
-            await s.client.update_library()
-        except YotoError as e:
-            raise HTTPException(status_code=502, detail=str(e))
-    if card_id not in s.client.library:
-        raise HTTPException(status_code=404, detail=f"Card {card_id} not in library")
-    # Hydrate chapters/tracks for this card.
     try:
         await s.client.update_card_detail(card_id)
     except YotoError as e:
         raise HTTPException(status_code=502, detail=str(e))
+    if card_id not in s.client.library:
+        raise HTTPException(status_code=404, detail=f"Card {card_id} not found at Yoto")
 
     card = s.client.library[card_id]
     chapters_out: list[dict] = []
