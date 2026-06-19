@@ -21,7 +21,7 @@ A LAN-only Python bridge for managing a family of Yoto players from a Raspberry 
 
 4. **Don't create new .md files mid-task.** The user prefers conversation context over intermediate docs. This file + `docs/STYLE.md` are the exceptions, both explicitly requested.
 
-5. **Restart after template / Python edits.** Starlette's Jinja2Templates caches templates by default. CSS changes are served fresh from disk; only the browser cache lies.
+5. **Restart after template / Python edits** (Starlette's Jinja2Templates caches by default). In dev (`uv run`), **CSS** changes are served fresh from disk — only the browser cache lies. In Docker, static files are `COPY`d into the image at build time, so CSS edits also need `docker compose up -d --build` to land.
 
 ## What we mutate on Yoto
 

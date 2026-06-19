@@ -6,6 +6,7 @@ client/scheduler in form-friendly handlers (returning 204 / 303 redirects)
 so that progressive enhancement works even without HTMX.
 """
 
+import time
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,9 @@ from .. import auth, config, storage
 
 _THIS_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(_THIS_DIR / "templates"))
+# Bumps every process start — a container restart invalidates browser caches
+# for app.css without forcing users to hard-refresh.
+templates.env.globals["static_version"] = str(int(time.time()))
 
 
 def _hms(seconds: Any) -> str:

@@ -237,9 +237,8 @@ sl-menu-item.menu-item-destructive sl-icon { color: var(--ys-error); }
 
 .routine-head {
   display: grid;
-  grid-template-columns: 1.4fr 2fr;
-  gap: 1rem;
-  align-items: end;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
   margin-bottom: 1rem;
   /* Leave room for the absolutely-positioned delete button in the corner. */
   padding-right: 2rem;
@@ -754,9 +753,8 @@ sl-button.btn-quiet-destructive:hover::part(base) {
 
 .event-row-action {
   display: grid;
-  grid-template-columns: 1fr 2fr;
-  gap: 1rem;
-  align-items: end;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
 }
 .event-row-bottom {
   display: grid;
@@ -835,8 +833,9 @@ sl-button.btn-quiet-destructive:hover::part(base) {
 }
 
 @media (max-width: 600px) {
+  /* event-row-action is already single-column at every breakpoint;
+   * keep the primary/bottom rows collapsing on narrow viewports. */
   .event-row-primary,
-  .event-row-action,
   .event-row-bottom {
     grid-template-columns: 1fr;
   }
@@ -1031,9 +1030,6 @@ hgroup p {
 /* ----- Mobile ---------------------------------------------- */
 
 @media (max-width: 600px) {
-  .routine-head {
-    grid-template-columns: 1fr;
-    gap: 0.75rem;
-  }
+  /* routine-head is already single-column at every breakpoint. */
   .app-title { font-size: 1.4rem; }
 }
