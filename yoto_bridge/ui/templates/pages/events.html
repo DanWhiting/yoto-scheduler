@@ -44,10 +44,7 @@
       </div>
 
       <template x-for="event in filteredEvents()" :key="event.id">
-        <article class="event-card" :class="{ 'event-card-incomplete': isIncomplete(event) }">
-          <sl-badge x-show="isIncomplete(event)" variant="warning" pill class="event-incomplete-badge">
-            Won't fire — pick a card
-          </sl-badge>
+        <article class="event-card">
           <sl-dropdown class="event-actions" placement="bottom-end" hoist>
             <sl-icon-button slot="trigger" name="three-dots-vertical" label="Event actions"></sl-icon-button>
             <sl-menu>
@@ -350,10 +347,15 @@
       },
 
       setActionType(event, type) {
+        if (event.action.type === type) return;
         event.action.type = type;
-        // Switching types invalidates the previously-chosen target — clear
-        // play args so the user picks fresh from the correctly-filtered modal.
-        event.action.card_id = null;
+        // Switching types invalidates the previously-chosen target. Auto-pick
+        // a sensible default from the new type's pool so the event stays
+        // valid — the user can always change it via the picker.
+        const fallback = type === 'radio'
+          ? this.cards.find(c => isRadioCard(c))
+          : this.cards.find(c => !isRadioCard(c));
+        event.action.card_id = fallback ? fallback.id : null;
         event.action.chapter_key = null;
         event.action.track_key = null;
         this.autosave();
@@ -364,13 +366,6 @@
         chars[idx] = chars[idx] === '1' ? '0' : '1';
         event.days_enabled = chars.join('');
         this.autosave();
-      },
-
-      isIncomplete(event) {
-        if (!event.action) return true;
-        if (event.action.type === 'card')  return !event.action.card_id;
-        if (event.action.type === 'radio') return !event.action.card_id;
-        return true;  // alarm_tone not implemented yet
       },
 
       // ----- card picker modal -----

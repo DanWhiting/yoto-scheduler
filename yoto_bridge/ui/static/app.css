@@ -617,18 +617,6 @@ sl-button.btn-quiet-destructive:hover::part(base) {
 }
 .event-card:hover { box-shadow: var(--ys-shadow-hover); }
 
-.event-card-incomplete {
-  border-color: var(--ys-error);
-  background: linear-gradient(0deg, var(--ys-surface), var(--ys-surface)) padding-box,
-              var(--ys-error-soft) border-box;
-}
-.event-incomplete-badge {
-  position: absolute;
-  top: -0.55rem;
-  left: 1rem;
-  z-index: 1;
-}
-
 .event-actions {
   position: absolute;
   top: 0.4rem;
