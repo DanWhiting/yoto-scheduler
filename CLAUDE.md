@@ -8,14 +8,14 @@ A LAN-only Python bridge for managing a family of Yoto players from a Raspberry 
 
 - **Routines**: time-window volume caps per player, with an optional card/group whitelist that reactively stops disallowed cards.
 - **Events**: scheduled playback actions per player.
-- **Library / Groups**: read-only views.
-- A mobile-friendly web UI at `/ui/*`. JSON API at the top level.
+- **Logs**: in-memory ring buffer of fires / blocks / card plays / transitions.
+- A mobile-friendly web UI at `/ui/*`. JSON API at the top level (`/library` and `/groups` JSON endpoints still exist — they back the pickers in the Routines and Events pages).
 
 ## Rules (must-follow)
 
 1. **Dry-run guard.** Every mutating call to `YotoClient` goes through `WriteGuard` in [yoto_bridge/dry_run.py](yoto_bridge/dry_run.py). When `YOTO_BRIDGE_DRY_RUN=1`, those calls log and no-op. **When you add a new mutating client method anywhere, add its name to `WRITE_METHODS` in `dry_run.py`** — otherwise it'll silently hit Yoto in dry-run mode and the user will lose their safety net.
 
-2. **Design language.** See [docs/STYLE.md](docs/STYLE.md). The four existing pages (Routines, Events, Library, Groups) are the working reference. Title Case for interactive elements; sentence case for body copy.
+2. **Design language.** See [docs/STYLE.md](docs/STYLE.md). The four pages (Routines, Events, Logs, Settings) are the working reference. Title Case for interactive elements; sentence case for body copy.
 
 3. **Runtime state lives in `user_data/` and is gitignored.** Tokens, schedule, events — never commit them. The directory is created on first write.
 
@@ -37,7 +37,9 @@ Plus reactive `stop` calls from the whitelist [Enforcer](yoto_bridge/enforcer.py
 
 Three whitelist modes per routine: empty lists + `allow_nothing=False` = unrestricted (default); non-empty lists = only those cards/groups; `allow_nothing=True` = block every card (sleeping mode). `allow_nothing` wins if both are set.
 
-The [Enforcer](yoto_bridge/enforcer.py) calls `client.stop(device_id)` when the now-playing card isn't in the resolved set (groups expanded against `client.groups`). It fires on three triggers:
+**Alarm tones always bypass the whitelist** regardless of mode. Tones are scheduled by the bridge itself (event actions) or fired by the player's own alarms — we should never be the thing stopping them. Enforcement checks `card_id in known_tone_ids` (passed live by reference from `app._known_tone_ids`) and short-circuits before any routine lookup.
+
+The [Enforcer](yoto_bridge/enforcer.py) calls `client.stop(device_id)` when the now-playing card isn't a tone AND isn't in the resolved set (groups expanded against `client.groups`). It fires on three triggers:
 - Every MQTT `on_update` (kid inserts / changes a card).
 - Each routine transition — `Scheduler._apply_and_schedule` calls `enforcer.recheck(device_id)` after writing the cap (catches transition-mid-play).
 - Each schedule edit — `sched.reload()` runs `_apply_and_schedule` for every player (catches edit-mid-play).
@@ -53,9 +55,10 @@ yoto_bridge/
   app.py            FastAPI app, lifespan, JSON API, State, serializers
   dry_run.py        WriteGuard proxy; WRITE_METHODS is the canonical list
   scheduler.py      Routines: per-player asyncio.Task per scheduled player
-  enforcer.py       Reactive whitelist enforcement via the MQTT on_update hook
-  events.py         Events: per-player asyncio.Task per enabled event
-  auth.py           Manual OAuth device-code flow with explicit scopes
+  enforcer.py       Whitelist enforcement (MQTT + scheduler-triggered rechecks)
+  events.py         Events: one asyncio.Task per enabled event
+  activity.py       In-memory ring buffer behind /logs and /ui/logs
+  auth.py           PKCE Authorization-Code flow against Yoto (Auth0)
   storage.py        Token blob — atomic-write JSON
   config.py         Env-var-driven configuration
   ui/
@@ -76,7 +79,7 @@ docs/STYLE.md       UI design language (tokens, components, copy)
 - **`crypto.randomUUID()` requires HTTPS or localhost.** Over LAN HTTP it's undefined on mobile Safari. UI uses a local `uid()` helper (Math.random + Date.now).
 - **Windows + aiomqtt**: must force `WindowsSelectorEventLoopPolicy` (Proactor doesn't implement `add_reader`). Handled in `__main__.py`. Doesn't affect Linux.
 - **Timezone**: routines + events use naive `datetime.now()` (wall-clock semantics — "21:00" means 21:00 *here*). Slim Docker images default to UTC, which would fire everything an hour off during BST. We install `tzdata` in the runtime image and default `TZ=Europe/London` in `docker-compose.yml`; both are required (TZ alone with no tzdata = silent UTC fallback). Override via the host's `.env` if you're not on UK time.
-- **Radios and alarm tones are normal library cards.** Yoto's "Yoto Radio / Yoto Daily / Sleep Radio / Classical Radio" cards live in the family library and are recognised by a title heuristic (`/\bradio\b|^yoto daily$/i`). Alarm-tone cards (e.g. `4OD25` "Wake with Jake") are *not* in `/card/family/library` but are fetchable via `update_card_detail`. The bridge auto-discovers them on startup from two sources: a hardcoded `SEED_TONE_IDS` tuple in [app.py](yoto_bridge/app.py) (the six tones we've verified are available on every Yoto family account), plus anything currently in `PlayerConfig.alarms[].sound_id`. Both feed `_known_tone_ids`; `/library` tags them with `category: "tone"`. There's no Yoto endpoint that lists all tones — see [scripts/probe_tones.py](scripts/probe_tones.py) for the dead-end probes. To add a new tone not in the seed list: assign it as an alarm in the Yoto app, refresh the bridge, then optionally unset it; or add the ID to `SEED_TONE_IDS` if it should be permanent.
+- **Radios and alarm tones are normal library cards.** Yoto's "Yoto Radio / Yoto Daily / Sleep Radio / Classical Radio" cards live in the family library and are recognised by a title heuristic (`/\bradio\b|^yoto daily$/i`). Alarm-tone cards (e.g. `4OD25` "Wake with Jake") are *not* in `/card/family/library` but are fetchable via `update_card_detail`. The bridge auto-discovers them on startup from two sources: a hardcoded `SEED_TONE_IDS` tuple in [app.py](yoto_bridge/app.py) (the six tones discovered during development; any that fail to fetch on a given account are silently skipped), plus anything currently in `PlayerConfig.alarms[].sound_id`. Both feed `_known_tone_ids`; `/library` tags them with `category: "tone"`. There's no Yoto endpoint that lists all tones — see [scripts/probe_tones.py](scripts/probe_tones.py) for the dead-end probes. To add a new tone not in the seed list: assign it as an alarm in the Yoto app, refresh the bridge, then optionally unset it; or add the ID to `SEED_TONE_IDS` if it should be permanent.
 - **Library load order**: `update_library()` must run *before* `_discover_alarm_tones()` in `_bring_online`. The tone discovery populates `client.library` with individual tone cards via `update_card_detail`, after which `/library`'s lazy-load check (`not s.client.library`) is False and the full library fetch is skipped — leaving the user with only the tones visible.
 
 ## UI gotchas (already worked around)
@@ -107,7 +110,7 @@ docs/STYLE.md       UI design language (tokens, components, copy)
 YOTO_BRIDGE_HOST=0.0.0.0 YOTO_BRIDGE_DRY_RUN=1 uv run python -m yoto_bridge
 ```
 
-`/` → redirects to `/ui/routines`. Authorise once via `/ui/settings` (device-code flow). MQTT event stream connects automatically.
+`/` → redirects to `/ui/routines`. Authorise once via `/ui/settings` (PKCE Authorization Code flow — browser redirect to Yoto, back to `/auth/callback`). MQTT event stream connects automatically.
 
 ## Deployment (Pi / Docker)
 
@@ -138,4 +141,5 @@ The project has no `[build-system]` in `pyproject.toml`, so uv only installs dep
 - **Time-driven asyncio scheduler**: each item gets one task that `asyncio.sleep`s to its next slot, fires, then reschedules itself. Used by both `scheduler.py` and `events.py`.
 - **Atomic JSON write**: `tmp = path.with_suffix(".json.tmp"); tmp.write_text(...); tmp.replace(path)` — used for tokens, schedule, events. New persistent state should follow this.
 - **JSON endpoint enriches IDs to objects** where it cuts a UI round-trip (e.g. `/groups` resolves `card_ids` against the library).
+- **Activity log via shared `ActivityLog` ring buffer**, passed by reference into anything that emits user-facing events (`EventsRunner`, `Enforcer`, `Scheduler`). Lost on restart by design.
 - **Visible state for everything**: loading / empty / error / saving / saved each have explicit UI. A silent spinner is a bug.

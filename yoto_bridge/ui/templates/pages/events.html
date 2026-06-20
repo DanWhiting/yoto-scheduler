@@ -279,7 +279,7 @@
       pickerOpen: false,
       pickerQuery: '',
       pickerEventId: null,
-      pickerFilter: 'card',  // 'card' | 'radio'
+      pickerFilter: 'card',  // 'card' | 'radio' | 'alarm_tone'
 
       // Page state
       loading: true,
@@ -356,8 +356,6 @@
             card_id: firstCardId,
             chapter_key: null,
             track_key: null,
-            group_id: null,
-            radio_station: null,
           },
         });
         if (firstCardId) this.loadTracks(firstCardId);

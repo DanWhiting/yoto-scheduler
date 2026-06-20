@@ -1,13 +1,15 @@
 """Scheduled play events.
 
 A user-defined event fires at a chosen time on chosen days for one player. It
-sets the player's volume and triggers a playback action — currently only
-`type: "card"` (play a card from the library). The data model scaffolds the
-other action types Yoto supports so adding them later is fill-in-the-blanks.
+sets the player's volume, then plays a `card` (any library card), a `radio`
+station (Yoto Radio / Yoto Daily / etc — recognised by title heuristic), or
+an `alarm_tone` (Wake with Jake / Fanfare / etc). All three resolve to a
+card_id under the hood and go through `play_card`; the type only controls
+which subset of the library the picker shows.
 
-Storage: events.json next to schedule.json. Loaded once at startup; each event
-gets its own asyncio task that sleeps until the next fire time, fires, and
-reschedules itself.
+Storage: events.json next to schedule.json. Loaded once at startup; each
+event gets its own asyncio task that sleeps until the next fire time, fires,
+and reschedules itself.
 """
 
 import asyncio
@@ -59,23 +61,18 @@ def raw_volume_to_percent(raw: int) -> int:
 class EventAction(BaseModel):
     """What to play when the event fires.
 
-    Only `card` is fully wired today. `radio` and `alarm_tone` are accepted in
-    storage and stubbed in the runner — the UI hides them as 'coming soon'
-    until we have Yoto's station / tone IDs.
+    All three types resolve to a card_id and go through play_card; `type`
+    only changes which subset of the library the events picker shows.
     """
 
     type: Literal["alarm_tone", "radio", "card"]
-    # type=card: card_id required; chapter_key + track_key optional (start
-    # from a specific point in the card instead of the beginning).
     card_id: Optional[str] = None
+    # Optional for type="card": start from a specific point inside the card
+    # instead of the beginning. Tones + radios ignore these.
     chapter_key: Optional[str] = None
     track_key: Optional[str] = None
-    # type=radio: a station id (TBD)
-    radio_station: Optional[str] = None
-    # type=alarm_tone: a Yoto alarm sound id (TBD)
-    tone_id: Optional[str] = None
 
-    # Accept extra keys from earlier saves (e.g. `group_id`) without erroring.
+    # Accept (and drop) unknown keys from older saves.
     model_config = {"extra": "ignore"}
 
 

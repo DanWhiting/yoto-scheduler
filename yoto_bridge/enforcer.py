@@ -6,8 +6,10 @@ Reacts to player state changes from two sources:
    (the active whitelist just changed, so any in-progress playback needs to
    be re-evaluated even though the player itself didn't change state).
 
-In both cases, if the now-playing card isn't in the resolved whitelist, the
-enforcer calls `stop` on the player.
+In both cases, if the now-playing card isn't a known alarm tone AND isn't in
+the resolved whitelist, the enforcer calls `stop` on the player. Tones
+always pass — they're scheduled by the bridge or Yoto's own alarms, never
+the kid trying to bypass the whitelist.
 
 Hard ceiling: there's no Yoto API to make the device refuse a card outright.
 Expect 1-3 seconds of audio before the stop lands on MQTT-triggered checks.

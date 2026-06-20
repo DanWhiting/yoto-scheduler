@@ -101,7 +101,7 @@ Just three levels — more than that and the page looks chaotic.
 | 0 | (none) | Flat surfaces, background |
 | 1 | `--ys-shadow` | Cards at rest |
 | 2 | `--ys-shadow-hover` | Cards on hover, dropdowns, popovers |
-| 3 | (TBD) | Modals, toasts |
+| 3 | `--ys-shadow-3` | Modals, toasts |
 
 Material 3 uses a *surface tint* (tinting the surface slightly with primary) on elevated surfaces. We do this implicitly via the warm cream background — anything lifted onto pure white surface naturally separates.
 
@@ -145,7 +145,7 @@ Always **pill-shaped** (`--ys-radius-pill`). Min height 36px / min width 40px. G
 - Label sits above the input, body-sm weight.
 - Time inputs are native (`<sl-input type="time">`) — defer to the OS picker on mobile, don't custom-build one.
 
-### Cards (routine card pattern, reusable for Collections / Events later)
+### Cards (routine + event card pattern)
 
 - Surface white, 14px radius, 1px `--ys-border`, level-1 shadow.
 - Hover lifts to level-2 shadow.
@@ -159,7 +159,6 @@ Always **pill-shaped** (`--ys-radius-pill`). Min height 36px / min width 40px. G
 - Each item is a small rounded box (`--ys-radius-sm`) with a subtle track background — visually distinct as a "button" at rest.
 - Active page: primary fill, white text.
 - Hover (non-active): soft-primary background, deeper text colour.
-- Stub/coming-soon: 40% opacity, `pointer-events: none`, tooltip on hover.
 
 ### Badges / chips
 
@@ -205,4 +204,4 @@ These reusable building blocks are already in `app.css`. Prefer composing them o
 - Pico + Shoelace themed via the same `--ys-*` tokens.
 - `@media (prefers-reduced-motion: reduce)` block in `app.css` cancels transform/transition animations.
 - `<sl-icon-button>::part(base)` raised to `--ys-tap-target` (44px) globally.
-- Empty / loading / saving / saved / error states on every editor page (routines, events).
+- Empty / loading / saving / saved / error states on every editor page (routines, events) and the activity log.

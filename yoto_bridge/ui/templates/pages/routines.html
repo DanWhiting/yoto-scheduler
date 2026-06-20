@@ -3,7 +3,7 @@
 {% block content %}
   <hgroup>
     <h2>Routines</h2>
-    <p>Set the volume limits that apply at different times of day. Each routine starts at the time you give it on each player.</p>
+    <p>Set the volume limit and which cards are allowed during each part of the day. Each routine starts at the time you give it on each player.</p>
   </hgroup>
 
   {% if not authorized %}
@@ -139,13 +139,15 @@
         Pick the cards and groups that are allowed during this routine.
         Anything else will be stopped within a couple of seconds of starting.
         Leave empty to allow everything, or pick <strong>Allow Nothing</strong>
-        to block every card (handy for a sleeping routine).
+        to block every card (good for a sleeping routine). Alarm tones
+        always play regardless of mode.
       </p>
 
       <sl-alert variant="warning" :open="selectedAllowNothing">
         <sl-icon slot="icon" name="shield-fill-x"></sl-icon>
-        <strong>Nothing will play during this routine.</strong>
-        Any card the kids insert will be stopped immediately.
+        <strong>No cards will play during this routine.</strong>
+        Any card the kids insert is stopped immediately. Scheduled alarm
+        tones still play — they're always allowed.
       </sl-alert>
 
       <div :class="{ 'whitelist-dimmed': selectedAllowNothing }">

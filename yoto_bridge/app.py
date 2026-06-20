@@ -2,8 +2,8 @@
 
 Owns one YotoClient for the app lifetime. Routes are thin wrappers around the
 client; on_update via connect_events keeps client.players in sync with the
-device. Token loaded from storage on startup; if absent, /auth/start kicks off
-a device-code flow.
+device. Token loaded from storage on startup; if absent, /auth/start kicks
+off a PKCE Authorization-Code flow against Yoto.
 """
 
 import asyncio
