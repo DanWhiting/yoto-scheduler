@@ -146,6 +146,11 @@ class Scheduler:
         self.client = client
         self.cfg: ScheduleConfig = load()
         self._tasks: dict[str, asyncio.Task[Any]] = {}
+        # Back-wired by app.py once Enforcer is constructed (Enforcer depends on
+        # Scheduler, so the dep can't be passed via constructor). When set,
+        # _apply_and_schedule fires a playback re-check after each cap apply so
+        # transitions and edits don't slip past mid-playback.
+        self.enforcer: Any = None
 
     def routine_cap(self, name: str) -> int | None:
         for r in self.cfg.routines:
@@ -240,6 +245,15 @@ class Scheduler:
                 log.info("Applied routine '%s' (cap %d) to %s", routine, cap, device_id)
             except Exception:
                 log.exception("Failed to apply cap %d to %s", cap, device_id)
+
+        # Re-evaluate current playback against the (possibly new) whitelist.
+        # Catches transition-mid-play and edit-mid-play — situations where no
+        # MQTT event would otherwise wake the enforcer.
+        if self.enforcer is not None:
+            try:
+                await self.enforcer.recheck(device_id)
+            except Exception:
+                log.exception("Enforcer recheck failed for %s", device_id)
 
         existing = self._tasks.get(device_id)
         if existing is not None and not existing.done():

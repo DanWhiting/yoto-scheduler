@@ -35,9 +35,16 @@ Plus reactive `stop` calls from the whitelist [Enforcer](yoto_bridge/enforcer.py
 
 ## Whitelist enforcement (Routines)
 
-A routine can carry `allowed_card_ids` + `allowed_group_ids`. Empty both = unrestricted (default). Otherwise the [Enforcer](yoto_bridge/enforcer.py) watches every MQTT `on_update` and calls `client.stop(device_id)` when the now-playing card_id isn't in the resolved union (groups expanded against `client.groups`).
+Three whitelist modes per routine: empty lists + `allow_nothing=False` = unrestricted (default); non-empty lists = only those cards/groups; `allow_nothing=True` = block every card (sleeping mode). `allow_nothing` wins if both are set.
 
-Hard ceiling: there's **no Yoto API to refuse a card outright** — enforcement is reactive only. Expect 1–3s of audio before the stop lands. If the bridge process is offline, nothing is enforced. The Enforcer dedups on `(device_id, card_id)` so it issues one `stop` per insertion, not one per MQTT message.
+The [Enforcer](yoto_bridge/enforcer.py) calls `client.stop(device_id)` when the now-playing card isn't in the resolved set (groups expanded against `client.groups`). It fires on three triggers:
+- Every MQTT `on_update` (kid inserts / changes a card).
+- Each routine transition — `Scheduler._apply_and_schedule` calls `enforcer.recheck(device_id)` after writing the cap (catches transition-mid-play).
+- Each schedule edit — `sched.reload()` runs `_apply_and_schedule` for every player (catches edit-mid-play).
+
+The Scheduler ↔ Enforcer link is back-wired in `_bring_online` (Enforcer depends on Scheduler, so the dep can't go through Scheduler's constructor). Enforcer dedups on `(device_id, card_id)` so it issues one `stop` per insertion, not one per event.
+
+Hard ceiling: there's **no Yoto API to refuse a card outright** — enforcement remains reactive. Expect 1–3s of audio before MQTT-triggered stops land; transition/edit-triggered stops land essentially immediately. If the bridge process is offline, nothing is enforced.
 
 ## Architecture
 

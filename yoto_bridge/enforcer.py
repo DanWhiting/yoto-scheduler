@@ -1,11 +1,17 @@
-"""Reactive routine-whitelist enforcement.
+"""Routine-whitelist enforcement.
 
-Watches MQTT-driven player state updates. When a player starts playing a card
-that's not in the active routine's whitelist, calls `stop` on the player.
+Reacts to player state changes from two sources:
+1. MQTT on_update events (someone inserts / changes a card).
+2. Scheduler-triggered rechecks after a routine transition or schedule edit
+   (the active whitelist just changed, so any in-progress playback needs to
+   be re-evaluated even though the player itself didn't change state).
 
-Hard ceiling: enforcement is reactive — there's no Yoto API to make the device
-refuse a card outright. Expect 1-3 seconds of audio before the stop lands. If
-the bridge is offline, nothing is enforced at all.
+In both cases, if the now-playing card isn't in the resolved whitelist, the
+enforcer calls `stop` on the player.
+
+Hard ceiling: there's no Yoto API to make the device refuse a card outright.
+Expect 1-3 seconds of audio before the stop lands on MQTT-triggered checks.
+If the bridge is offline, nothing is enforced.
 """
 
 from __future__ import annotations
@@ -28,6 +34,17 @@ class Enforcer:
         # is re-evaluated, but a single insert isn't stopped repeatedly).
         self._blocked: dict[str, str] = {}
         self._lock = asyncio.Lock()
+
+    async def recheck(self, device_id: str) -> None:
+        """Re-evaluate current playback for a player without waiting for the
+        next MQTT update. Called by the scheduler after each routine transition
+        and schedule reload — events that change the active whitelist but
+        don't otherwise prompt a player state push.
+        """
+        player = self.client.players.get(device_id)
+        if player is None:
+            return
+        await self.check(player)
 
     async def check(self, player: Any) -> None:
         last_event = getattr(player, "last_event", None)

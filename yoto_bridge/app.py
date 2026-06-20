@@ -45,8 +45,12 @@ async def _bring_online(state: State, blob: dict) -> None:
     state.authorized = True
     log.info("Linked; %d player(s) loaded.", len(state.client.players))
     state.sched = scheduler.Scheduler(state.client)
-    await state.sched.start()
     state.enforcer = enforcer_mod.Enforcer(state.client, state.sched)
+    # Back-wire so Scheduler can trigger playback re-checks on transitions /
+    # schedule reloads (closes the "transition-mid-play" gap that pure-MQTT
+    # enforcement can't catch).
+    state.sched.enforcer = state.enforcer
+    await state.sched.start()
     # Start MQTT subscription AFTER scheduler+enforcer exist so the on_update
     # closure has something to dispatch to from the first event onward.
     _start_events(state)
