@@ -26,13 +26,17 @@ log = logging.getLogger(__name__)
 
 
 class Enforcer:
-    def __init__(self, client: Any, sched: scheduler.Scheduler) -> None:
+    def __init__(self, client: Any, sched: scheduler.Scheduler, activity: Any = None) -> None:
         self.client = client
         self.sched = sched
+        self.activity = activity
         # device_id -> card_id we most recently stopped. Cleared when the
         # player's card_id changes (so re-inserting the same forbidden card
         # is re-evaluated, but a single insert isn't stopped repeatedly).
         self._blocked: dict[str, str] = {}
+        # device_id -> card_id we most recently logged as "played" — so a
+        # single insertion doesn't spam the activity log on every MQTT tick.
+        self._last_played: dict[str, str] = {}
         self._lock = asyncio.Lock()
 
     async def recheck(self, device_id: str) -> None:
@@ -59,6 +63,7 @@ class Enforcer:
         # Yoto reports "no card inserted" as the literal string "none" or null.
         if not card_id or card_id == "none":
             self._blocked.pop(device_id, None)
+            self._last_played.pop(device_id, None)
             return
 
         # Only enforce on active playback; pause/stop events shouldn't trigger.
@@ -66,6 +71,20 @@ class Enforcer:
         playback_value = getattr(playback, "value", None) if playback is not None else None
         if playback_value != "playing":
             return
+
+        # Activity log: a card just started playing (different from whatever
+        # was playing last). Dedup so resuming/seeking the same card doesn't
+        # spam the log.
+        if self.activity is not None and self._last_played.get(device_id) != card_id:
+            self._last_played[device_id] = card_id
+            device_name = _device_name(self.client, device_id)
+            card_title = _card_title(self.client, card_id)
+            self.activity.add(
+                kind="card_played",
+                summary=f"Played '{card_title or card_id}' on {device_name}",
+                device_id=device_id, device_name=device_name,
+                card_id=card_id, card_title=card_title,
+            )
 
         routine = self.sched.active_routine(device_id)
         if routine is None:
@@ -92,7 +111,27 @@ class Enforcer:
                 "Whitelist block: card=%s on device=%s during routine='%s'",
                 card_id, device_id, routine.name,
             )
+            if self.activity is not None:
+                device_name = _device_name(self.client, device_id)
+                card_title = _card_title(self.client, card_id)
+                self.activity.add(
+                    kind="blocked",
+                    summary=f"Blocked '{card_title or card_id}' on {device_name} during '{routine.name}'",
+                    device_id=device_id, device_name=device_name,
+                    card_id=card_id, card_title=card_title,
+                    routine_name=routine.name,
+                )
             try:
                 await self.client.stop(device_id)
             except Exception:
                 log.exception("Failed to stop playback for whitelist block")
+
+
+def _device_name(client: Any, device_id: str) -> str:
+    player = (getattr(client, "players", None) or {}).get(device_id)
+    return getattr(player, "name", None) or device_id
+
+
+def _card_title(client: Any, card_id: str) -> str | None:
+    card = (getattr(client, "library", None) or {}).get(card_id)
+    return getattr(card, "title", None) if card is not None else None

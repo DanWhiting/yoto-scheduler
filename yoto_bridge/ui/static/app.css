@@ -1052,3 +1052,68 @@ hgroup p {
   /* routine-head is already single-column at every breakpoint. */
   .app-title { font-size: 1.4rem; }
 }
+
+
+/* ----- Logs page ---------------------------------------------- */
+
+.logs-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+.logs-actions .logs-count { margin-left: auto; }
+
+.log-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.6rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.log-row {
+  display: grid;
+  grid-template-columns: 2rem 1fr;
+  align-items: start;
+  gap: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--ys-surface);
+  border: 1px solid var(--ys-border);
+  border-left: 3px solid var(--ys-border-strong);
+  border-radius: var(--ys-radius-sm);
+}
+.log-row-event_fired { border-left-color: var(--ys-primary); }
+.log-row-blocked     { border-left-color: var(--ys-error); }
+.log-row-card_played { border-left-color: var(--ys-success); }
+.log-row-transition  { border-left-color: var(--ys-muted); }
+
+.log-icon {
+  font-size: 1.2rem;
+  margin-top: 0.15rem;
+  color: var(--ys-muted);
+}
+.log-row-event_fired .log-icon { color: var(--ys-primary); }
+.log-row-blocked     .log-icon { color: var(--ys-error); }
+.log-row-card_played .log-icon { color: var(--ys-success); }
+
+.log-summary {
+  margin: 0;
+  font-weight: 500;
+}
+.log-meta {
+  margin: 0.15rem 0 0;
+  color: var(--ys-muted);
+  font-size: 0.82rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.log-chip {
+  background: var(--ys-track-bg);
+  color: var(--ys-text);
+  padding: 0.05rem 0.45rem;
+  border-radius: var(--ys-radius-pill);
+  font-size: 0.78rem;
+}

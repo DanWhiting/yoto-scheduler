@@ -28,6 +28,21 @@ _TIME_RE = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
 _DAYS_RE = re.compile(r"^[01]{7}$")
 
 
+def _device_name(client: Any, device_id: Optional[str]) -> str:
+    """Pretty player name for the activity log; falls back to device_id."""
+    if not device_id:
+        return "(unknown device)"
+    player = (getattr(client, "players", None) or {}).get(device_id)
+    return getattr(player, "name", None) or device_id
+
+
+def _card_title(client: Any, card_id: Optional[str]) -> Optional[str]:
+    if not card_id:
+        return None
+    card = (getattr(client, "library", None) or {}).get(card_id)
+    return getattr(card, "title", None) if card is not None else None
+
+
 def raw_volume_to_percent(raw: int) -> int:
     """Yoto's hardware volume is a 0-16 raw scale (what the device displays and
     what set_player_config(day_max_volume_limit=…) accepts). But yoto_api's
@@ -146,8 +161,9 @@ def seconds_until_next_fire(event: Event, now: Optional[datetime] = None) -> flo
 class EventsRunner:
     """Owns one asyncio.Task per enabled event."""
 
-    def __init__(self, client: Any) -> None:
+    def __init__(self, client: Any, activity: Any = None) -> None:
         self.client = client
+        self.activity = activity
         self.cfg: EventsConfig = load()
         self._tasks: dict[str, asyncio.Task[Any]] = {}
 
@@ -210,6 +226,20 @@ class EventsRunner:
             "Firing event '%s' on %s at %s (action=%s)",
             event.name or event.id, event.player_id, event.time, event.action.type,
         )
+        if self.activity is not None:
+            label = event.name.strip() if event.name else f"{event.action.type} event"
+            player_name = _device_name(self.client, event.player_id)
+            self.activity.add(
+                kind="event_fired",
+                summary=f"Fired '{label}' on {player_name}",
+                device_id=event.player_id,
+                device_name=player_name,
+                event_id=event.id,
+                event_name=event.name,
+                action_type=event.action.type,
+                card_id=event.action.card_id,
+                card_title=_card_title(self.client, event.action.card_id),
+            )
         # Set playback volume. event.volume is on the raw 0-16 scale (UI slider);
         # set_volume expects a percentage. The device's volume_max still clamps.
         try:

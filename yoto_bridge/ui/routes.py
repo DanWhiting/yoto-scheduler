@@ -38,8 +38,7 @@ templates.env.filters["hms"] = _hms
 NAV_ITEMS = [
     ("Routines", "/ui/routines", False),
     ("Events",   "/ui/events",   False),
-    ("Library",  "/ui/library",  False),
-    ("Groups",   "/ui/groups",   False),
+    ("Logs",     "/ui/logs",     False),
     ("Settings", "/ui/settings", False),
 ]
 
@@ -98,23 +97,13 @@ async def routines_page(request: Request) -> Any:
     )
 
 
-@router.get("/ui/library", response_class=HTMLResponse)
-async def library_page(request: Request) -> Any:
+@router.get("/ui/logs", response_class=HTMLResponse)
+async def logs_page(request: Request) -> Any:
     s = _state(request)
     return templates.TemplateResponse(
         request,
-        "pages/library.html",
-        {"nav": _nav("/ui/library"), "authorized": s.authorized},
-    )
-
-
-@router.get("/ui/groups", response_class=HTMLResponse)
-async def groups_page(request: Request) -> Any:
-    s = _state(request)
-    return templates.TemplateResponse(
-        request,
-        "pages/groups.html",
-        {"nav": _nav("/ui/groups"), "authorized": s.authorized},
+        "pages/logs.html",
+        {"nav": _nav("/ui/logs"), "authorized": s.authorized},
     )
 
 

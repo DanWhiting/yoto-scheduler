@@ -142,8 +142,9 @@ async def apply_cap(client: Any, device_id: str, volume_max: int) -> None:
 class Scheduler:
     """Owns one asyncio.Task per scheduled player."""
 
-    def __init__(self, client: Any) -> None:
+    def __init__(self, client: Any, activity: Any = None) -> None:
         self.client = client
+        self.activity = activity
         self.cfg: ScheduleConfig = load()
         self._tasks: dict[str, asyncio.Task[Any]] = {}
         # Back-wired by app.py once Enforcer is constructed (Enforcer depends on
@@ -271,4 +272,13 @@ class Scheduler:
         except asyncio.CancelledError:
             return
         log.info("Transition: %s -> %s", device_id, routine)
+        if self.activity is not None:
+            player = (getattr(self.client, "players", None) or {}).get(device_id)
+            device_name = getattr(player, "name", None) or device_id
+            self.activity.add(
+                kind="transition",
+                summary=f"{device_name} → {routine}",
+                device_id=device_id, device_name=device_name,
+                routine_name=routine,
+            )
         await self._apply_and_schedule(device_id)

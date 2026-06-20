@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Logs · Yoto Scheduler{% endblock %}
+{% block content %}
+  <hgroup>
+    <h2>Logs</h2>
+    <p>Recent activity from the bridge. Lost on restart — this is for "what's been happening", not an audit trail.</p>
+  </hgroup>
+
+  {% if not authorized %}
+    <article>You need to connect your Yoto account first. <a href="/ui/settings">Go to settings.</a></article>
+  {% else %}
+
+  <script defer src="{{ url_for('static', path='vendor/alpine.min.js') }}"></script>
+
+  <div x-data="logsViewer()" x-cloak>
+    <div class="action-row logs-actions">
+      <sl-button @click="load()" :loading="loading">
+        <sl-icon slot="prefix" name="arrow-clockwise"></sl-icon>
+        Refresh
+      </sl-button>
+      <sl-switch :checked="autoRefresh" @sl-change="toggleAuto($event.target.checked)">
+        Auto-refresh
+      </sl-switch>
+      <span class="caption logs-count"
+            x-text="entries.length + ' entr' + (entries.length === 1 ? 'y' : 'ies')"></span>
+    </div>
+
+    <sl-alert x-show="loadError" variant="danger" open>
+      <strong>Couldn't load logs:</strong> <span x-text="loadError"></span>
+    </sl-alert>
+
+    <div x-show="!loading && !loadError && !entries.length" class="empty-state">
+      <p><strong>Nothing yet.</strong></p>
+      <p>Card plays, events firing, and routine blocks will appear here as they happen.</p>
+    </div>
+
+    <ol class="log-list" x-show="entries.length">
+      <template x-for="e in entries" :key="e.ts + ':' + e.kind + ':' + (e.card_id || '') + ':' + (e.device_id || '')">
+        <li class="log-row" :class="'log-row-' + e.kind">
+          <sl-icon class="log-icon" :name="iconFor(e.kind)"></sl-icon>
+          <div class="log-body">
+            <p class="log-summary" x-text="e.summary"></p>
+            <p class="log-meta">
+              <time x-text="fmtTime(e.ts)"></time>
+              <span x-show="e.routine_name && e.kind !== 'transition'"
+                    class="log-chip" x-text="e.routine_name"></span>
+            </p>
+          </div>
+        </li>
+      </template>
+    </ol>
+  </div>
+
+  <style>[x-cloak] { display: none !important; }</style>
+
+  <script>
+  function logsViewer() {
+    return {
+      entries: [],
+      loading: false,
+      loadError: '',
+      autoRefresh: true,
+      _timer: null,
+
+      iconFor(kind) {
+        switch (kind) {
+          case 'event_fired':  return 'play-circle';
+          case 'blocked':      return 'shield-fill-x';
+          case 'card_played':  return 'music-note-beamed';
+          case 'transition':   return 'clock-history';
+          default:             return 'dot';
+        }
+      },
+
+      fmtTime(iso) {
+        try {
+          const d = new Date(iso);
+          const now = new Date();
+          const sameDay = d.toDateString() === now.toDateString();
+          const opts = sameDay
+            ? { hour: '2-digit', minute: '2-digit', second: '2-digit' }
+            : { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+          return d.toLocaleString([], opts);
+        } catch (_) {
+          return iso;
+        }
+      },
+
+      async load() {
+        this.loading = true;
+        this.loadError = '';
+        try {
+          const resp = await fetch('/logs?limit=200');
+          if (!resp.ok) {
+            const body = await resp.json().catch(() => ({}));
+            throw new Error(body.detail || resp.statusText);
+          }
+          const data = await resp.json();
+          this.entries = data.entries || [];
+        } catch (e) {
+          this.loadError = e.message || String(e);
+        } finally {
+          this.loading = false;
+        }
+      },
+
+      toggleAuto(on) {
+        this.autoRefresh = !!on;
+        if (this._timer) { clearInterval(this._timer); this._timer = null; }
+        if (this.autoRefresh) {
+          this._timer = setInterval(() => this.load(), 5000);
+        }
+      },
+
+      init() {
+        // Alpine calls init() automatically on mount. First load + arm the
+        // auto-refresh timer here so we don't need an x-init attribute too.
+        this.load();
+        this.toggleAuto(this.autoRefresh);
+      },
+    };
+  }
+  </script>
+  {% endif %}
+{% endblock %}

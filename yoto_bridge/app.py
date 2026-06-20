@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from yoto_api import YotoClient, YotoError
 
-from . import auth, config, enforcer as enforcer_mod, events, scheduler, storage
+from . import activity as activity_mod, auth, config, enforcer as enforcer_mod, events, scheduler, storage
 from .dry_run import WriteGuard
 from .ui import routes as ui_routes
 
@@ -34,6 +34,7 @@ class State:
     sched: scheduler.Scheduler | None = None
     events_runner: events.EventsRunner | None = None
     enforcer: enforcer_mod.Enforcer | None = None
+    activity: activity_mod.ActivityLog | None = None
 
 
 async def _bring_online(state: State, blob: dict) -> None:
@@ -44,8 +45,9 @@ async def _bring_online(state: State, blob: dict) -> None:
     await state.client.update_all_player_info()
     state.authorized = True
     log.info("Linked; %d player(s) loaded.", len(state.client.players))
-    state.sched = scheduler.Scheduler(state.client)
-    state.enforcer = enforcer_mod.Enforcer(state.client, state.sched)
+    state.activity = activity_mod.ActivityLog()
+    state.sched = scheduler.Scheduler(state.client, activity=state.activity)
+    state.enforcer = enforcer_mod.Enforcer(state.client, state.sched, activity=state.activity)
     # Back-wire so Scheduler can trigger playback re-checks on transitions /
     # schedule reloads (closes the "transition-mid-play" gap that pure-MQTT
     # enforcement can't catch).
@@ -66,7 +68,7 @@ async def _bring_online(state: State, blob: dict) -> None:
         await _discover_alarm_tones(state.client)
     except Exception:
         log.exception("Alarm-tone discovery failed")
-    state.events_runner = events.EventsRunner(state.client)
+    state.events_runner = events.EventsRunner(state.client, activity=state.activity)
     await state.events_runner.start()
 
 
@@ -742,3 +744,16 @@ async def put_events(body: events.EventsConfig) -> dict:
     runner = _require_events(s)
     await runner.reload(body)
     return {"ok": True, "config": runner.cfg.model_dump()}
+
+
+# --- activity log ----------------------------------------------------------
+
+
+@app.get("/logs")
+async def get_logs(limit: int = 200) -> dict:
+    s = _state()
+    if s.activity is None:
+        return {"entries": []}
+    if not 1 <= limit <= 500:
+        raise HTTPException(400, "limit must be 1..500")
+    return {"entries": s.activity.recent(limit)}
