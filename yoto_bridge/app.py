@@ -47,7 +47,13 @@ async def _bring_online(state: State, blob: dict) -> None:
     log.info("Linked; %d player(s) loaded.", len(state.client.players))
     state.activity = activity_mod.ActivityLog()
     state.sched = scheduler.Scheduler(state.client, activity=state.activity)
-    state.enforcer = enforcer_mod.Enforcer(state.client, state.sched, activity=state.activity)
+    state.enforcer = enforcer_mod.Enforcer(
+        state.client, state.sched,
+        activity=state.activity,
+        # _known_tone_ids is populated by _discover_alarm_tones a few lines
+        # later; we pass the live set by reference so additions show up.
+        known_tone_ids=_known_tone_ids,
+    )
     # Back-wire so Scheduler can trigger playback re-checks on transitions /
     # schedule reloads (closes the "transition-mid-play" gap that pure-MQTT
     # enforcement can't catch).

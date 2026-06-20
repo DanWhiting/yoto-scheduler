@@ -26,10 +26,22 @@ log = logging.getLogger(__name__)
 
 
 class Enforcer:
-    def __init__(self, client: Any, sched: scheduler.Scheduler, activity: Any = None) -> None:
+    def __init__(
+        self,
+        client: Any,
+        sched: scheduler.Scheduler,
+        activity: Any = None,
+        known_tone_ids: set[str] | None = None,
+    ) -> None:
         self.client = client
         self.sched = sched
         self.activity = activity
+        # Live reference to app.py's _known_tone_ids set — populated by
+        # _discover_alarm_tones AFTER this constructor runs, so mutations
+        # via the shared set are visible here without re-wiring.
+        self.known_tone_ids: set[str] = (
+            known_tone_ids if known_tone_ids is not None else set()
+        )
         # device_id -> card_id we most recently stopped. Cleared when the
         # player's card_id changes (so re-inserting the same forbidden card
         # is re-evaluated, but a single insert isn't stopped repeatedly).
@@ -85,6 +97,13 @@ class Enforcer:
                 device_id=device_id, device_name=device_name,
                 card_id=card_id, card_title=card_title,
             )
+
+        # Alarm tones bypass the whitelist. They're system cards the bridge
+        # fires deliberately (scheduled events, Yoto's own alarms) — we
+        # should never be the thing stopping them.
+        if card_id in self.known_tone_ids:
+            self._blocked.pop(device_id, None)
+            return
 
         routine = self.sched.active_routine(device_id)
         if routine is None:
