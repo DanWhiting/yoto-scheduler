@@ -126,10 +126,15 @@
     </div>
 
     {# Whitelist editor — shared across routine cards. #}
+    {# .self on sl-after-hide: stop the inner <sl-alert>'s own hide event
+       (fired when "Allow Everything" flips selectedAllowNothing back to
+       false) from bubbling up and closing the dialog. Same event name on
+       both components, so the dialog's listener catches the alert's
+       event without it. #}
     <sl-dialog :label="whitelistOpen ? ('Allowed Cards · ' + (editingRoutineName() || 'Routine')) : ''"
                class="card-picker-dialog whitelist-dialog"
                :open="whitelistOpen"
-               @sl-after-hide="closeWhitelist()">
+               @sl-after-hide.self="closeWhitelist()">
       <p class="whitelist-blurb">
         Pick the cards and groups that are allowed during this routine.
         Anything else will be stopped within a couple of seconds of starting.
