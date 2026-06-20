@@ -149,7 +149,7 @@
         No groups in your library. Create them in the Yoto app to enable group-based whitelists.
       </div>
       <div class="whitelist-group-strip" x-show="groups.length">
-        <template x-for="g in groups" :key="g.id">
+        <template x-for="g in sortedGroups" :key="g.id">
           <button type="button"
                   class="whitelist-group-chip"
                   :class="{ selected: selectedGroupIds.includes(g.id) }"
@@ -238,6 +238,9 @@
       selectedCardIds: [],
       selectedAllowNothing: false,
       whitelistQuery: '',
+      // Snapshots taken on open so picks don't jump position while editing.
+      sortedCards: [],
+      sortedGroups: [],
 
       startEdit(id) {
         this.editingId = id;
@@ -309,7 +312,17 @@
         this.selectedCardIds = [...(r.allowed_card_ids || [])];
         this.selectedAllowNothing = !!r.allow_nothing;
         this.whitelistQuery = '';
+        // Float currently-selected items to the top so the user can see their
+        // picks at a glance. Stable within a dialog session (we don't reshuffle
+        // on click — that would be disorienting); the next open re-snapshots.
+        this.sortedCards = this._bySelectedFirst(this.cards, this.selectedCardIds);
+        this.sortedGroups = this._bySelectedFirst(this.groups, this.selectedGroupIds);
         this.whitelistOpen = true;
+      },
+
+      _bySelectedFirst(items, selectedIds) {
+        const sel = new Set(selectedIds);
+        return [...items].sort((a, b) => (sel.has(a.id) ? 0 : 1) - (sel.has(b.id) ? 0 : 1));
       },
 
       closeWhitelist() {
@@ -364,8 +377,8 @@
 
       filteredWhitelistCards() {
         const q = (this.whitelistQuery || '').trim().toLowerCase();
-        if (!q) return this.cards;
-        return this.cards.filter(c =>
+        if (!q) return this.sortedCards;
+        return this.sortedCards.filter(c =>
           (c.title || '').toLowerCase().includes(q) ||
           (c.author || '').toLowerCase().includes(q) ||
           (c.series_title || '').toLowerCase().includes(q)
