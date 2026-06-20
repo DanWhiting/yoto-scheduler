@@ -108,7 +108,9 @@
                     @click="openWhitelist(r)">
               <span class="card-pick-current">
                 <sl-icon class="card-pick-fallback"
-                         :name="whitelistEmpty(r) ? 'unlock' : 'shield-check'"></sl-icon>
+                         :name="r.allow_nothing ? 'shield-fill-x'
+                              : whitelistEmpty(r) ? 'unlock'
+                              : 'shield-check'"></sl-icon>
                 <span class="card-pick-title" x-text="whitelistSummary(r)"></span>
               </span>
               <sl-icon name="chevron-right" class="card-pick-chevron"></sl-icon>
@@ -131,9 +133,17 @@
       <p class="whitelist-blurb">
         Pick the cards and groups that are allowed during this routine.
         Anything else will be stopped within a couple of seconds of starting.
-        Leave empty to allow everything (the default).
+        Leave empty to allow everything, or pick <strong>Allow Nothing</strong>
+        to block every card (handy for a sleeping routine).
       </p>
 
+      <sl-alert variant="warning" :open="selectedAllowNothing">
+        <sl-icon slot="icon" name="shield-fill-x"></sl-icon>
+        <strong>Nothing will play during this routine.</strong>
+        Any card the kids insert will be stopped immediately.
+      </sl-alert>
+
+      <div :class="{ 'whitelist-dimmed': selectedAllowNothing }">
       <h4 class="whitelist-section-head">Groups <small x-text="'(' + groups.length + ')'"></small></h4>
       <div x-show="!groups.length" class="muted-note">
         No groups in your library. Create them in the Yoto app to enable group-based whitelists.
@@ -185,7 +195,10 @@
         </template>
       </div>
 
-      <sl-button slot="footer" @click="clearWhitelist()">Allow Everything</sl-button>
+      </div>
+
+      <sl-button slot="footer" @click="setAllowEverything()">Allow Everything</sl-button>
+      <sl-button slot="footer" @click="setAllowNothing()">Allow Nothing</sl-button>
       <sl-button slot="footer" variant="primary" @click="finishWhitelist()">Done</sl-button>
     </sl-dialog>
   </div>
@@ -223,6 +236,7 @@
       whitelistRoutineId: null,
       selectedGroupIds: [],
       selectedCardIds: [],
+      selectedAllowNothing: false,
       whitelistQuery: '',
 
       startEdit(id) {
@@ -254,6 +268,7 @@
             volume_max: r.volume_max,
             allowed_card_ids: r.allowed_card_ids || [],
             allowed_group_ids: r.allowed_group_ids || [],
+            allow_nothing: !!r.allow_nothing,
             times: Object.fromEntries(this.devices.map(d => {
               const sched = (schedule.config.schedules || {})[d.device_id] || {};
               return [d.device_id, sched[r.name] || ''];
@@ -271,6 +286,7 @@
       },
 
       whitelistSummary(r) {
+        if (r.allow_nothing) return 'Allow nothing';
         if (this.whitelistEmpty(r)) return 'Allow everything';
         const groupNames = (r.allowed_group_ids || [])
           .map(id => (this.groups.find(g => g.id === id) || {}).name)
@@ -291,6 +307,7 @@
         this.whitelistRoutineId = r.id;
         this.selectedGroupIds = [...(r.allowed_group_ids || [])];
         this.selectedCardIds = [...(r.allowed_card_ids || [])];
+        this.selectedAllowNothing = !!r.allow_nothing;
         this.whitelistQuery = '';
         this.whitelistOpen = true;
       },
@@ -308,24 +325,38 @@
         if (r) {
           r.allowed_group_ids = [...this.selectedGroupIds];
           r.allowed_card_ids = [...this.selectedCardIds];
+          r.allow_nothing = this.selectedAllowNothing;
           this.autosave();
         }
         this.whitelistOpen = false;
         this.whitelistRoutineId = null;
       },
 
-      clearWhitelist() {
+      // Three explicit modes — each footer button + each pick action moves us
+      // between them. allow_nothing wins over the lists if both are set, so we
+      // keep them mutually exclusive client-side too.
+      setAllowEverything() {
         this.selectedGroupIds = [];
         this.selectedCardIds = [];
+        this.selectedAllowNothing = false;
+      },
+
+      setAllowNothing() {
+        this.selectedGroupIds = [];
+        this.selectedCardIds = [];
+        this.selectedAllowNothing = true;
       },
 
       toggleGroup(id) {
+        // Picking anything opts out of "allow nothing" automatically.
+        this.selectedAllowNothing = false;
         const i = this.selectedGroupIds.indexOf(id);
         if (i >= 0) this.selectedGroupIds.splice(i, 1);
         else this.selectedGroupIds.push(id);
       },
 
       toggleCard(id) {
+        this.selectedAllowNothing = false;
         const i = this.selectedCardIds.indexOf(id);
         if (i >= 0) this.selectedCardIds.splice(i, 1);
         else this.selectedCardIds.push(id);
@@ -357,6 +388,7 @@
           volume_max: 10,
           allowed_card_ids: [],
           allowed_group_ids: [],
+          allow_nothing: false,
           // Default every player's start time to noon so the user has something
           // concrete to nudge from, rather than a blank-looking control with no
           // visible cue that it needs setting.
@@ -379,6 +411,7 @@
           volume_max: parseInt(r.volume_max, 10),
           allowed_card_ids: r.allowed_card_ids || [],
           allowed_group_ids: r.allowed_group_ids || [],
+          allow_nothing: !!r.allow_nothing,
         }));
         const schedules = {};
         for (const d of this.devices) {

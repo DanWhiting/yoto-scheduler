@@ -23,11 +23,14 @@ log = logging.getLogger(__name__)
 class Routine(BaseModel):
     name: str
     volume_max: int = Field(ge=0, le=16)
-    # Both empty = no restriction (the default). Otherwise the union of these
-    # IDs (with groups expanded to their member card-IDs at enforce-time) is
-    # the set of cards the player may play during this routine.
+    # Three-mode whitelist:
+    # - allow_nothing=True              → block every card (e.g. "Sleeping")
+    # - both lists empty + allow_nothing=False → no restriction (default)
+    # - either list non-empty           → only those cards/groups allowed
+    # allow_nothing takes precedence over the lists if both are set.
     allowed_card_ids: list[str] = Field(default_factory=list)
     allowed_group_ids: list[str] = Field(default_factory=list)
+    allow_nothing: bool = False
 
     model_config = {"extra": "ignore"}
 
@@ -164,10 +167,14 @@ class Scheduler:
         return None
 
     def resolved_allowed_cards(self, routine: Routine) -> set[str] | None:
-        """Union of allowed_card_ids and the card-IDs of each allowed group.
+        """Returns the set of allowed card_ids, or None when unrestricted.
 
-        Returns None when the routine has no whitelist (allow everything).
+        - allow_nothing=True              → empty set (= every card is blocked)
+        - both lists empty                → None (= allow everything)
+        - either list non-empty           → union of card_ids + group members
         """
+        if routine.allow_nothing:
+            return set()
         if not routine.allowed_card_ids and not routine.allowed_group_ids:
             return None
         allowed = set(routine.allowed_card_ids)
