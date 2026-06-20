@@ -589,6 +589,13 @@ sl-button.btn-quiet-destructive:hover::part(base) {
   max-width: 44rem;
   width: min(92vw, 44rem);
 }
+/* Footer holds 3 buttons; on narrow screens they wrap and Shoelace's
+ * default footer has no row-gap, so the wrapped Done sits flush against
+ * the row above. Restore vertical breathing room. */
+.whitelist-dialog::part(footer) {
+  flex-wrap: wrap;
+  row-gap: 0.5rem;
+}
 .whitelist-blurb {
   color: var(--ys-muted);
   margin: 0 0 1rem;
@@ -609,7 +616,7 @@ sl-button.btn-quiet-destructive:hover::part(base) {
 .whitelist-group-strip {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.6rem;
+  gap: 0.25rem;
   margin-bottom: 0.4rem;
 }
 .whitelist-group-chip {
