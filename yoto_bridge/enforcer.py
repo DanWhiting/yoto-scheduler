@@ -20,11 +20,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any
 
 from . import scheduler
 
 log = logging.getLogger(__name__)
+
+# How long to suppress enforcement after the bridge initiates a play_card.
+# Long enough to cover MQTT round-trip + device state change + the next MQTT
+# push back; short enough that a kid inserting a forbidden card right after a
+# legitimate event still gets blocked. Empirical, may need tuning.
+_BRIDGE_PLAY_GRACE_SECONDS = 8.0
 
 
 class Enforcer:
@@ -51,7 +58,21 @@ class Enforcer:
         # device_id -> card_id we most recently logged as "played" — so a
         # single insertion doesn't spam the activity log on every MQTT tick.
         self._last_played: dict[str, str] = {}
+        # device_id -> monotonic deadline. While now < deadline, the enforcer
+        # short-circuits on this device because the bridge itself just issued
+        # a play_card (event firing). Without this, the scheduler-triggered
+        # recheck at a coincident routine transition can race the event's
+        # play_card and stop the legitimate playback.
+        self._bridge_play_until: dict[str, float] = {}
         self._lock = asyncio.Lock()
+
+    def mark_bridge_play(self, device_id: str) -> None:
+        """Suppress enforcement on this device for a short grace window.
+
+        Called by EventsRunner immediately before its play_card so that any
+        concurrent transition recheck doesn't fight the bridge's own command.
+        """
+        self._bridge_play_until[device_id] = time.monotonic() + _BRIDGE_PLAY_GRACE_SECONDS
 
     async def recheck(self, device_id: str) -> None:
         """Re-evaluate current playback for a player without waiting for the
@@ -72,6 +93,18 @@ class Enforcer:
         device_id = getattr(device, "device_id", None) or getattr(player, "device_id", None)
         if not device_id:
             return
+
+        # In-flight bridge-initiated play: suppress every enforcement decision
+        # for this device until the grace window expires. We may be looking at
+        # a stale last_event (the device hasn't yet pushed the new card via
+        # MQTT) so any stop would target the OLD playback that the bridge is
+        # actively replacing.
+        deadline = self._bridge_play_until.get(device_id)
+        if deadline is not None:
+            if time.monotonic() < deadline:
+                return
+            # Window expired — clear so we don't re-check on every call.
+            self._bridge_play_until.pop(device_id, None)
 
         card_id = getattr(last_event, "card_id", None)
         # Yoto reports "no card inserted" as the literal string "none" or null.

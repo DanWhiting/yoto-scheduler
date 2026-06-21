@@ -74,7 +74,11 @@ async def _bring_online(state: State, blob: dict) -> None:
         await _discover_alarm_tones(state.client)
     except Exception:
         log.exception("Alarm-tone discovery failed")
-    state.events_runner = events.EventsRunner(state.client, activity=state.activity)
+    state.events_runner = events.EventsRunner(
+        state.client,
+        activity=state.activity,
+        enforcer=state.enforcer,
+    )
     await state.events_runner.start()
 
 

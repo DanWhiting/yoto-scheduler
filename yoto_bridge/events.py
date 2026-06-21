@@ -158,9 +158,13 @@ def seconds_until_next_fire(event: Event, now: Optional[datetime] = None) -> flo
 class EventsRunner:
     """Owns one asyncio.Task per enabled event."""
 
-    def __init__(self, client: Any, activity: Any = None) -> None:
+    def __init__(self, client: Any, activity: Any = None, enforcer: Any = None) -> None:
         self.client = client
         self.activity = activity
+        # Optional — when present, we notify the enforcer right before each
+        # play_card so a coincident routine transition doesn't stop our own
+        # event's playback mid-flight. See enforcer.mark_bridge_play.
+        self.enforcer = enforcer
         self.cfg: EventsConfig = load()
         self._tasks: dict[str, asyncio.Task[Any]] = {}
 
@@ -258,4 +262,8 @@ class EventsRunner:
                 kwargs["chapter_key"] = a.chapter_key
             if a.track_key:
                 kwargs["track_key"] = a.track_key
+            # Tell the enforcer we're about to play, so a coincident transition
+            # recheck doesn't race us and stop the playback we're starting.
+            if self.enforcer is not None:
+                self.enforcer.mark_bridge_play(event.player_id)
             await self.client.play_card(event.player_id, a.card_id, **kwargs)
