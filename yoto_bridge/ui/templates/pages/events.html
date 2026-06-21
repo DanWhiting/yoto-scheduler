@@ -94,12 +94,13 @@
           <div class="event-row event-row-action">
             <label>
               <small>Action</small>
-              {# Setting `.value` inside $nextTick rather than via `:value=` so
-                 Shoelace finishes upgrading the element + slotting its options
-                 BEFORE we assign — otherwise saved events of type radio /
-                 alarm_tone render as the empty default. (Background in
-                 CLAUDE.md's sl-select gotcha.) #}
-              <sl-select x-init="$nextTick(() => $el.value = event.action.type)"
+              {# x-effect (not x-init): on initial render the alarm_tone option
+                 may still be disabled (library not loaded yet), and Shoelace
+                 silently refuses to set value to a disabled option, leaving
+                 the select blank. The hasAlarmTones() read registers the
+                 library state as a reactive dependency, so this effect re-
+                 fires when the option flips enabled and lands the value. #}
+              <sl-select x-effect="syncSelect($el, event.action.type, hasAlarmTones())"
                          @sl-change="setActionType(event, $event.target.value)">
                 <sl-option value="card">Play a card</sl-option>
                 <sl-option value="radio">Play radio</sl-option>
@@ -154,7 +155,11 @@
           <div class="event-row" x-show="event.action.type === 'card' && event.action.card_id">
             <label>
               <small>Track (optional — leave on "From start" to play the whole card)</small>
-              <sl-select x-init="$nextTick(() => { $el.value = (event.action.chapter_key && event.action.track_key) ? `${event.action.chapter_key}:${event.action.track_key}` : '' })"
+              {# Reading tracksByCard[card_id] inside x-effect registers it as a
+                 reactive dependency, so the value re-applies once loadTracks
+                 populates the option list (otherwise we'd set the value before
+                 the matching <sl-option> exists and fall back to blank). #}
+              <sl-select x-effect="syncSelect($el, trackComboKey(event), tracksByCard[event.action.card_id])"
                          @sl-change="setTrack(event, $event.target.value, $event.target)">
                 <sl-option value="">From start (whole card)</sl-option>
                 <template x-for="t in tracksForCard(event.action.card_id)" :key="t.chapter_key + ':' + t.key">
@@ -265,6 +270,36 @@
     return !!(card && !isRadioCard(card) && !isToneCard(card));
   }
 
+  // Set a Shoelace <sl-select>'s value, robust against the upgrade race:
+  // x-effect can fire BEFORE customElements.define('sl-select') has run
+  // (Shoelace's autoloader is async). In that window el.updateComplete is
+  // undefined, so the only path that mattered before silently returned;
+  // any value we set on the pre-upgrade element is overwritten when
+  // Shoelace upgrades and reads its own state. We chain on whenDefined +
+  // updateComplete so the assignment lands on a fully-rendered component.
+  // Idempotent: assigns only if the current value differs.
+  function syncSelect(el, want /*, ...deps */) {
+    if (!el) return;
+    const v = want == null ? '' : String(want);
+    const apply = () => { if (el.value !== v) el.value = v; };
+
+    apply(); // post-upgrade happy path: most calls land here
+
+    if (window.customElements?.whenDefined) {
+      customElements.whenDefined('sl-select')
+        .then(() => el.updateComplete)
+        .then(apply)
+        .catch(() => {});
+    } else if (typeof el?.updateComplete?.then === 'function') {
+      el.updateComplete.then(apply).catch(() => {});
+    }
+
+    // Belt-and-braces — catches edge cases like reactive :disabled flips
+    // on an <sl-option> prompting sl-select to reset value mid-stream.
+    setTimeout(apply, 100);
+    setTimeout(apply, 500);
+  }
+
   function eventsEditor() {
     return {
       devices: [],
@@ -338,6 +373,11 @@
       },
 
       hasAlarmTones() { return this.cards.some(c => isToneCard(c)); },
+
+      trackComboKey(event) {
+        const a = event.action || {};
+        return (a.chapter_key && a.track_key) ? `${a.chapter_key}:${a.track_key}` : '';
+      },
 
       addEvent() {
         if (!this.selectedPlayerId) return;
